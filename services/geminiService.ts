@@ -79,7 +79,6 @@ const applyFiltersFunction: FunctionDeclaration = {
     },
 };
 
-// --- NEW FUNCTION DECLARATION FOR CHART DATA CONTROL ---
 const setChartDisplayFunction: FunctionDeclaration = {
     name: 'setChartDisplay',
     description: 'Updates the primary data field (Y-axis) plotted on the bar charts (bar or bar2) and sets the new chart title.',
@@ -129,6 +128,7 @@ export async function runChat(prompt: string, data: RealEstateSale[]): Promise<G
                 parts: [{ text: prompt }]
             },
             config: {
+                // --- CRITICAL FIX: Explicitly include 'changing the data displayed' in the system instruction ---
                 systemInstruction: `You are an AI assistant for a real estate data dashboard. ${dataSummary} ${context} You can answer questions about the data and control the dashboard UI. When asked to perform an action like resizing a chart, filtering data, calculating metrics, or changing the data displayed on a chart, use the provided tools. For general conversation or data questions that don't require specific calculations, provide a helpful text response.`,
                 tools: [{ functionDeclarations: allFunctions }],
             }
