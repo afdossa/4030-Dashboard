@@ -1,7 +1,6 @@
 import { GoogleGenAI, FunctionDeclaration, Type } from "@google/genai";
 import type { RealEstateSale } from '../types';
 
-// Ensure the API key is available.
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 if (!API_KEY) {
@@ -9,8 +8,6 @@ if (!API_KEY) {
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY || "AIzaSyBvLw_ytxa0KskssT8jXcjFLkaxHWKZWIw" });
-
-// --- FUNCTION DECLARATIONS ---
 
 const resizeChartFunction: FunctionDeclaration = {
     name: 'resizeChart',
@@ -35,7 +32,7 @@ const resizeChartFunction: FunctionDeclaration = {
 
 const calculateAggregateFunction: FunctionDeclaration = {
     name: 'calculateAggregate',
-    description: 'Calculates an aggregate value (average, sum, count, median) for a specific data field, optionally grouped by another field.',
+    description: 'Calculates an aggregate value (average, sum, count, median) for a specific data field, providing the result as a textual answer for analysis, not a chart update.',
     parameters: {
         type: Type.OBJECT,
         properties: {
@@ -81,7 +78,7 @@ const applyFiltersFunction: FunctionDeclaration = {
 
 const setChartDisplayFunction: FunctionDeclaration = {
     name: 'setChartDisplay',
-    description: 'Updates the primary data field (Y-axis) plotted on the bar charts (bar or bar2) and sets the new chart title.',
+    description: "Updates the primary data field (Y-axis) plotted on the bar charts (bar or bar2) to reflect a new visualization, such as changing from 'average' to 'count'. This is used whenever the user requests a chart's data source to change.",
     parameters: {
         type: Type.OBJECT,
         properties: {
@@ -128,8 +125,7 @@ export async function runChat(prompt: string, data: RealEstateSale[]): Promise<G
                 parts: [{ text: prompt }]
             },
             config: {
-                // --- CRITICAL FIX: Explicitly include 'changing the data displayed' in the system instruction ---
-                systemInstruction: `You are an AI assistant for a real estate data dashboard. ${dataSummary} ${context} You can answer questions about the data and control the dashboard UI. When asked to perform an action like resizing a chart, filtering data, calculating metrics, or changing the data displayed on a chart, use the provided tools. For general conversation or data questions that don't require specific calculations, provide a helpful text response.`,
+                systemInstruction: `You are an AI assistant for a real estate data dashboard. ${dataSummary} ${context} You can answer questions about the data and control the dashboard UI. When asked to perform an action that results in a visual change (like changing aggregation from average to count), you MUST use the 'setChartDisplay' function. Use 'calculateAggregate' only for text-based data analysis.`,
                 tools: [{ functionDeclarations: allFunctions }],
             }
         });
