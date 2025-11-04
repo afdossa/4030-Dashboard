@@ -4,12 +4,9 @@ import BarChartComponent from './components/BarChart';
 import LineChartComponent from './components/LineChart';
 import ScatterPlotComponent from './components/ScatterPlot';
 import Chatbot from './components/Chatbot';
-// import FilterControls from './components/FilterControls'; // Removed
 
-// New type for controlling the data displayed in a chart
 type DisplayField = keyof RealEstateSale | 'sales_count' | 'avg_sale_amount' | 'count';
 
-// New state to control which data field is displayed in the Bar Chart
 interface ChartDisplayConfig {
     bar: { displayField: DisplayField, title: string };
     bar2: { displayField: DisplayField, title: string };
@@ -23,7 +20,6 @@ const App: React.FC = () => {
         line: { size: 'medium', title: 'Sales Trend Over Years' },
         scatter: { size: 'medium', title: 'Assessed Value vs. Sale Amount' },
     });
-    // New state to control the specific data field displayed in the Bar Charts
     const [chartDisplay, setChartDisplay] = useState<ChartDisplayConfig>({
         bar: { displayField: 'avg_sale_amount', title: 'Average Sale Amount by Town' },
         bar2: { displayField: 'count', title: 'Sales Count by Property Type' },
@@ -45,7 +41,6 @@ const App: React.FC = () => {
             .catch(error => console.error('Error fetching real estate data:', error));
     }, []);
 
-    // New function for the LLM to change the field displayed on a chart
     const setChartDisplayField = (chartName: 'bar' | 'bar2', displayField: DisplayField, title: string) => {
         setChartDisplay(prevConfig => ({
             ...prevConfig,
@@ -77,7 +72,6 @@ const App: React.FC = () => {
             const propText = propertyTypes.length > 0 ? propertyTypes.join(', ') : 'All';
             return `Filters applied. Showing towns: ${townText}; property types: ${propText}.`;
         }
-        // New function call for the LLM to change the displayed data
         if (name === 'setChartDisplay') {
             const { chartName, field, title } = args as { chartName: 'bar' | 'bar2', field: DisplayField, title: string };
             if (chartName === 'bar' || chartName === 'bar2') {
@@ -113,7 +107,9 @@ const App: React.FC = () => {
                         aggValue = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
                     }
                     else aggValue = values.length;
-                    resultParts.push(`- ${key}: ${key} is ${aggValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+
+                    // FIX: Changed this line to remove the redundant group key from the output string
+                    resultParts.push(`- ${key}: ${aggValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
                 }
                 return resultParts.join('\n');
             } else {
@@ -153,10 +149,7 @@ const App: React.FC = () => {
         });
     }, [salesData, filters]);
 
-    // Combined and generalized data preparation for Bar Charts
     const barChartData = useMemo(() => {
-        const field = chartDisplay.bar.displayField as keyof RealEstateSale | 'avg_sale_amount' | 'count';
-
         const dataByTown = filteredData.reduce((acc, sale) => {
             const town = sale.town;
             if (!acc[town]) acc[town] = { sales: [], count: 0 };
@@ -168,12 +161,10 @@ const App: React.FC = () => {
         return Object.entries(dataByTown).map(([town, data]) => ({
             town,
             avg_sale_amount: data.sales.reduce((a, b) => a + b, 0) / data.count,
-            // Add other possible aggregation fields here for the LLM to select
             total_sale_amount: data.sales.reduce((a, b) => a + b, 0),
             sales_count: data.count,
-            // Add more fields if needed
         }));
-    }, [filteredData, chartDisplay.bar.displayField]); // Dependency on the display field
+    }, [filteredData, chartDisplay.bar.displayField]);
 
     const propertyTypeBarChartData = useMemo(() => {
         const dataByPropType = filteredData.reduce((acc, sale) => {
@@ -192,7 +183,7 @@ const App: React.FC = () => {
             total_sale_amount: data.sum_sale_amount,
             avg_assessed_value: data.sum_assessed_value / data.count,
         })).sort((a,b) => b.count - a.count);
-    }, [filteredData, chartDisplay.bar2.displayField]); // Dependency on the display field
+    }, [filteredData, chartDisplay.bar2.displayField]);
 
     const lineChartData = useMemo(() => {
         const dataByYear = filteredData.reduce((acc, sale) => {
@@ -208,7 +199,6 @@ const App: React.FC = () => {
         })).sort((a, b) => a.year - b.year);
     }, [filteredData]);
 
-    // Determine the correct data and keys for the Bar Chart by Town (bar)
     const barChartConfig = useMemo(() => {
         const field = chartDisplay.bar.displayField;
         let yAxisName: string;
@@ -222,12 +212,11 @@ const App: React.FC = () => {
             yAxisName = 'Number of Sales';
             fill = "#5b21b6";
         } else {
-            yAxisName = field as string; // Fallback
+            yAxisName = field as string;
         }
         return { xAxisKey: "town", yAxisKey: field, yAxisName, yAxisTickFormatter, fill };
     }, [chartDisplay.bar.displayField]);
 
-    // Determine the correct data and keys for the Bar Chart by Property Type (bar2)
     const propertyTypeBarChartConfig = useMemo(() => {
         const field = chartDisplay.bar2.displayField;
         let yAxisName: string;
@@ -243,9 +232,9 @@ const App: React.FC = () => {
         } else if (field === 'avg_assessed_value') {
             yAxisName = 'Average Assessed Value';
             yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
-            fill = "#10b981"; // Green
+            fill = "#10b981";
         } else {
-            yAxisName = field as string; // Fallback
+            yAxisName = field as string;
         }
         return { xAxisKey: "property_type", yAxisKey: field, yAxisName, yAxisTickFormatter, fill };
     }, [chartDisplay.bar2.displayField]);
@@ -255,14 +244,13 @@ const App: React.FC = () => {
         <div className="flex flex-col md:flex-row h-screen font-sans">
             <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
                 <h1 className="text-3xl font-bold text-orange-500 mb-6">Real Estate Sales Dashboard</h1>
-                {/* Removed FilterControls component */}
+
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     {Object.entries(chartConfig).map(([key, config]) => {
                         const chartName = key as ChartName;
                         const className = `bg-gray-800/50 rounded-lg p-4 shadow-lg transition-all duration-500 min-h-[400px] flex flex-col ${getGridClass(config.size)}`;
                         return (
                             <div key={chartName} className={className}>
-                                {/* Use title from LLM control state if it's a bar chart */}
                                 <h2 className="text-lg font-semibold text-gray-300 mb-4">
                                     {(chartName === 'bar' || chartName === 'bar2') ? chartDisplay[chartName].title : config.title}
                                 </h2>
