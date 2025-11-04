@@ -1,0 +1,5 @@
+{
+  "name": "Interactive Real Estate Dashboard",
+  "description": "An interactive D3-based data visualization dashboard for real estate sales data, featuring a Gemini-powered AI chatbot for dynamic analysis and control.",
+  "requestFramePermissions": []
+}
