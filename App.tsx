@@ -15,14 +15,14 @@ interface ChartDisplayConfig {
 const App: React.FC = () => {
     const [salesData, setSalesData] = useState<RealEstateSale[]>([]);
     const [chartConfig, setChartConfig] = useState<ChartConfig>({
-        bar: { size: 'medium', title: 'Raw Sale Amount by Town' },
-        bar2: { size: 'medium', title: 'Raw Assessed Value by Property Type' },
+        bar: { size: 'medium', title: 'Raw Sale Amount by Town' }, // Updated title
+        bar2: { size: 'medium', title: 'Raw Assessed Value by Property Type' }, // Updated title
         line: { size: 'medium', title: 'Sales Trend Over Years' },
         scatter: { size: 'medium', title: 'Assessed Value vs. Sale Amount' },
     });
     const [chartDisplay, setChartDisplay] = useState<ChartDisplayConfig>({
-        bar: { displayField: 'sale_amount', title: 'Raw Sale Amount by Town' },
-        bar2: { displayField: 'assessed_value', title: 'Raw Assessed Value by Property Type' },
+        bar: { displayField: 'sale_amount', title: 'Raw Sale Amount by Town' }, // Changed default to raw field
+        bar2: { displayField: 'assessed_value', title: 'Raw Assessed Value by Property Type' }, // Changed default to raw field
     });
     const [filters, setFilters] = useState<FilterState>({
         towns: [],
@@ -150,18 +150,13 @@ const App: React.FC = () => {
     }, [salesData, filters]);
 
     const barChartData = useMemo(() => {
-        // When displaying a raw data field, we need one entry per row in filteredData
         const field = chartDisplay.bar.displayField;
-        if (field in filteredData[0] || field === 'sale_amount' || field === 'assessed_value') {
-            return filteredData.map(sale => ({
-                ...sale, // Include all data
-                // Add town as the key for x-axis if not already present
-                town: sale.town,
-                [field]: sale[field as keyof RealEstateSale]
-            }));
+        // If the display field is a raw data field, just return the filtered data
+        if (field === 'sale_amount' || field === 'assessed_value') {
+            return filteredData;
         }
 
-        // Keep the aggregation logic for backwards compatibility if a metric is manually set
+        // Keep the aggregation logic for calculated fields (like count/average)
         const dataByTown = filteredData.reduce((acc, sale) => {
             const town = sale.town;
             if (!acc[town]) acc[town] = { sales: [], count: 0 };
@@ -179,18 +174,13 @@ const App: React.FC = () => {
     }, [filteredData, chartDisplay.bar.displayField]);
 
     const propertyTypeBarChartData = useMemo(() => {
-        // When displaying a raw data field, we need one entry per row in filteredData
         const field = chartDisplay.bar2.displayField;
-        if (field in filteredData[0] || field === 'sale_amount' || field === 'assessed_value') {
-            return filteredData.map(sale => ({
-                ...sale, // Include all data
-                // Add property_type as the key for x-axis if not already present
-                property_type: sale.property_type,
-                [field]: sale[field as keyof RealEstateSale]
-            }));
+        // If the display field is a raw data field, just return the filtered data
+        if (field === 'sale_amount' || field === 'assessed_value') {
+            return filteredData;
         }
 
-        // Keep the aggregation logic for backwards compatibility if a metric is manually set
+        // Keep the aggregation logic for calculated fields (like count/average)
         const dataByPropType = filteredData.reduce((acc, sale) => {
             const propType = sale.property_type;
             if (!acc[propType]) acc[propType] = { count: 0, sum_sale_amount: 0, sum_assessed_value: 0 };
@@ -230,21 +220,22 @@ const App: React.FC = () => {
         let fill = "#F66733";
         let xAxisKey: keyof RealEstateSale | 'town' = "town";
 
-        if (field === 'sale_amount' || field === 'assessed_value' || field === 'avg_sale_amount' || field === 'total_sale_amount') {
-            yAxisName = field === 'sale_amount' ? 'Sale Amount' : field === 'assessed_value' ? 'Assessed Value' : field === 'avg_sale_amount' ? 'Average Sale Amount' : 'Total Sale Amount';
+        // Check for raw data fields
+        if (field === 'sale_amount' || field === 'assessed_value') {
+            yAxisName = field === 'sale_amount' ? 'Sale Amount' : 'Assessed Value';
             yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
-            if (field === 'sale_amount' || field === 'assessed_value') {
-                xAxisKey = 'town'; // When raw data, town is the implicit group
-            }
-        } else if (field === 'sales_count' || field === 'count') {
+            // When raw data is shown, we use the Town field for grouping/labeling on the X axis, even if it shows all records
+            xAxisKey = 'town';
+        } else if (field === 'avg_sale_amount' || field === 'total_sale_amount') {
+            yAxisName = field === 'avg_sale_amount' ? 'Average Sale Amount' : 'Total Sale Amount';
+            yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
+        } else if (field === 'sales_count') {
             yAxisName = 'Number of Sales';
             fill = "#5b21b6";
         } else {
             yAxisName = field as string;
-            if (field in filteredData[0]) {
-                xAxisKey = field as keyof RealEstateSale; // If raw field is selected
-            }
         }
+        // Ensure xAxisKey is always 'town' for this specific chart
         return { xAxisKey: "town", yAxisKey: field, yAxisName, yAxisTickFormatter, fill };
     }, [chartDisplay.bar.displayField]);
 
@@ -255,14 +246,17 @@ const App: React.FC = () => {
         let fill = "#5b21b6";
         let xAxisKey: keyof RealEstateSale | 'property_type' = "property_type";
 
-
-        if (field === 'sale_amount' || field === 'assessed_value' || field === 'avg_sale_amount' || field === 'total_sale_amount') {
-            yAxisName = field === 'sale_amount' ? 'Sale Amount' : field === 'assessed_value' ? 'Assessed Value' : field === 'avg_sale_amount' ? 'Average Sale Amount' : 'Total Sale Amount';
+        // Check for raw data fields
+        if (field === 'sale_amount' || field === 'assessed_value') {
+            yAxisName = field === 'sale_amount' ? 'Sale Amount' : 'Assessed Value';
             yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
             fill = "#F66733";
-            if (field === 'sale_amount' || field === 'assessed_value') {
-                xAxisKey = 'property_type'; // When raw data, property_type is the implicit group
-            }
+            // When raw data is shown, we use the Property Type field for grouping/labeling on the X axis
+            xAxisKey = 'property_type';
+        } else if (field === 'avg_sale_amount' || field === 'total_sale_amount') {
+            yAxisName = field === 'avg_sale_amount' ? 'Average Sale Amount' : 'Total Sale Amount';
+            yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
+            fill = "#F66733";
         } else if (field === 'count') {
             yAxisName = 'Number of Sales';
         } else if (field === 'avg_assessed_value') {
@@ -271,10 +265,8 @@ const App: React.FC = () => {
             fill = "#10b981";
         } else {
             yAxisName = field as string;
-            if (field in filteredData[0]) {
-                xAxisKey = field as keyof RealEstateSale; // If raw field is selected
-            }
         }
+        // Ensure xAxisKey is always 'property_type' for this specific chart
         return { xAxisKey: "property_type", yAxisKey: field, yAxisName, yAxisTickFormatter, fill };
     }, [chartDisplay.bar2.displayField]);
 
