@@ -3,7 +3,7 @@ import { GoogleGenAI, FunctionDeclaration, Type } from "@google/genai";
 import type { RealEstateSale } from '../types';
 
 // Ensure the API key is available.
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const API_KEY = process.env.API_KEY;
 
 if (!API_KEY) {
     console.warn("API_KEY environment variable not set. Using a placeholder. AI features will not work.");
