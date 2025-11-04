@@ -15,14 +15,14 @@ interface ChartDisplayConfig {
 const App: React.FC = () => {
     const [salesData, setSalesData] = useState<RealEstateSale[]>([]);
     const [chartConfig, setChartConfig] = useState<ChartConfig>({
-        bar: { size: 'medium', title: 'Raw Sale Amount by Town' }, // Updated title
-        bar2: { size: 'medium', title: 'Raw Assessed Value by Property Type' }, // Updated title
+        bar: { size: 'medium', title: 'Raw Sale Amount by Town' },
+        bar2: { size: 'medium', title: 'Raw Assessed Value by Property Type' },
         line: { size: 'medium', title: 'Sales Trend Over Years' },
         scatter: { size: 'medium', title: 'Assessed Value vs. Sale Amount' },
     });
     const [chartDisplay, setChartDisplay] = useState<ChartDisplayConfig>({
-        bar: { displayField: 'sale_amount', title: 'Raw Sale Amount by Town' }, // Changed default to raw field
-        bar2: { displayField: 'assessed_value', title: 'Raw Assessed Value by Property Type' }, // Changed default to raw field
+        bar: { displayField: 'sale_amount', title: 'Raw Sale Amount by Town' },
+        bar2: { displayField: 'assessed_value', title: 'Raw Assessed Value by Property Type' },
     });
     const [filters, setFilters] = useState<FilterState>({
         towns: [],
@@ -150,6 +150,11 @@ const App: React.FC = () => {
     }, [salesData, filters]);
 
     const barChartData = useMemo(() => {
+        // ADDED CHECK: If there's no data, return an empty array immediately
+        if (filteredData.length === 0) {
+            return [];
+        }
+
         const field = chartDisplay.bar.displayField;
         // If the display field is a raw data field, just return the filtered data
         if (field === 'sale_amount' || field === 'assessed_value') {
@@ -174,6 +179,11 @@ const App: React.FC = () => {
     }, [filteredData, chartDisplay.bar.displayField]);
 
     const propertyTypeBarChartData = useMemo(() => {
+        // ADDED CHECK: If there's no data, return an empty array immediately
+        if (filteredData.length === 0) {
+            return [];
+        }
+
         const field = chartDisplay.bar2.displayField;
         // If the display field is a raw data field, just return the filtered data
         if (field === 'sale_amount' || field === 'assessed_value') {
