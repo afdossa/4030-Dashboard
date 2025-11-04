@@ -9,7 +9,7 @@ if (!API_KEY) {
     console.warn("API_KEY environment variable not set. Using a placeholder. AI features will not work.");
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY || "YOUR_API_KEY_HERE" });
+const ai = new GoogleGenAI({ apiKey: API_KEY || "AIzaSyBvLw_ytxa0KskssT8jXcjFLkaxHWKZWIw" });
 
 const resizeChartFunction: FunctionDeclaration = {
     name: 'resizeChart',
