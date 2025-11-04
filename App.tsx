@@ -21,7 +21,7 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    fetch('real_estate_data.json')
+      fetch(`${import.meta.env.BASE_URL}real_estate_data.json`)
       .then(response => {
         if (!response.ok) {
           throw new Error('Network response was not ok');
