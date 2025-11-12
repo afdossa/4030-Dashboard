@@ -5,7 +5,7 @@ import LineChartComponent from './components/LineChart';
 import ScatterPlotComponent from './components/ScatterPlot';
 import Chatbot from './components/Chatbot';
 
-type DisplayField = keyof RealEstateSale | 'sales_count' | 'avg_sale_amount' | 'count';
+type DisplayField = keyof RealEstateSale | 'sales_count' | 'avg_sale_amount' | 'count' | 'avg_assessed_value' | 'total_sale_amount';
 
 interface ChartDisplayConfig {
     bar: { displayField: DisplayField, title: string };
@@ -14,11 +14,13 @@ interface ChartDisplayConfig {
 
 const App: React.FC = () => {
     const [salesData, setSalesData] = useState<RealEstateSale[]>([]);
+    // NOTE: chartConfig state is kept to track potential user/chatbot size changes,
+    // but the final rendering logic below overrides the 'size' property to enforce the fixed layout.
     const [chartConfig, setChartConfig] = useState<ChartConfig>({
-        bar: { size: 'medium', title: 'Raw Sale Amount by Town' },
-        bar2: { size: 'medium', title: 'Raw Assessed Value by Property Type' },
-        line: { size: 'medium', title: 'Sales Trend Over Years' },
-        scatter: { size: 'medium', title: 'Assessed Value vs. Sale Amount' },
+        bar: { size: 'small', title: 'Raw Sale Amount by Town' },
+        bar2: { size: 'small', title: 'Raw Assessed Value by Property Type' },
+        line: { size: 'small', title: 'Sales Trend Over Years' },
+        scatter: { size: 'full', title: 'Assessed Value vs. Sale Amount' },
     });
     const [chartDisplay, setChartDisplay] = useState<ChartDisplayConfig>({
         bar: { displayField: 'sale_amount', title: 'Raw Sale Amount by Town' },
@@ -28,6 +30,7 @@ const App: React.FC = () => {
         towns: [],
         propertyTypes: [],
     });
+    const [selectedSale, setSelectedSale] = useState<RealEstateSale | null>(null);
 
     useEffect(() => {
         fetch(`${import.meta.env.BASE_URL}real_estate_data.json`)
@@ -53,6 +56,14 @@ const App: React.FC = () => {
         return `Successfully changed the data displayed in the ${chartName} chart to show ${title}.`;
     };
 
+    const handlePointClick = (sale: RealEstateSale) => {
+        if (selectedSale && selectedSale.serial_number === sale.serial_number) {
+            setSelectedSale(null);
+        } else {
+            setSelectedSale(sale);
+        }
+    };
+
     const handleFunctionCall = async (name: string, args: any): Promise<string> => {
         if (name === 'resizeChart') {
             const { chartName, size } = args as { chartName: ChartName, size: ChartSize };
@@ -61,7 +72,8 @@ const App: React.FC = () => {
                     ...prevConfig,
                     [chartName]: { ...prevConfig[chartName], size },
                 }));
-                return `Successfully resized the ${chartName} chart to ${size}.`;
+                // Acknowledge the change for the user but note the visual effect might be limited due to the fixed layout.
+                return `Successfully updated the internal size configuration for '${chartName}' to '${size}'. Note: The dashboard's layout is currently fixed (scatter full, others small) to ensure a stable view.`;
             }
             return `Error: Chart '${chartName}' not found.`;
         }
@@ -70,6 +82,7 @@ const App: React.FC = () => {
             setFilters({ towns, propertyTypes });
             const townText = towns.length > 0 ? towns.join(', ') : 'All';
             const propText = propertyTypes.length > 0 ? propertyTypes.join(', ') : 'All';
+            setSelectedSale(null);
             return `Filters applied. Showing towns: ${townText}; property types: ${propText}.`;
         }
         if (name === 'setChartDisplay') {
@@ -108,7 +121,6 @@ const App: React.FC = () => {
                     }
                     else aggValue = values.length;
 
-                    // FIX: Changed this line to remove the redundant group key from the output string
                     resultParts.push(`- ${key}: ${aggValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
                 }
                 return resultParts.join('\n');
@@ -133,11 +145,11 @@ const App: React.FC = () => {
 
     const getGridClass = (size: ChartSize): string => {
         switch (size) {
-            case 'small': return 'lg:col-span-1';
-            case 'medium': return 'lg:col-span-2';
-            case 'large': return 'lg:col-span-3';
-            case 'full': return 'lg:col-span-4';
-            default: return 'lg:col-span-2';
+            case 'small': return 'lg:col-span-4';
+            case 'medium': return 'lg:col-span-6';
+            case 'large': return 'lg:col-span-8';
+            case 'full': return 'lg:col-span-12';
+            default: return 'lg:col-span-12';
         }
     };
 
@@ -149,20 +161,24 @@ const App: React.FC = () => {
         });
     }, [salesData, filters]);
 
+    const chartBaseData = useMemo(() => {
+        if (selectedSale) {
+            return filteredData.filter(sale => sale.town === selectedSale.town && sale.property_type === selectedSale.property_type);
+        }
+        return filteredData;
+    }, [filteredData, selectedSale]);
+
     const barChartData = useMemo(() => {
-        // ADDED CHECK: If there's no data, return an empty array immediately
-        if (filteredData.length === 0) {
+        if (chartBaseData.length === 0) {
             return [];
         }
 
         const field = chartDisplay.bar.displayField;
-        // If the display field is a raw data field, just return the filtered data
         if (field === 'sale_amount' || field === 'assessed_value') {
-            return filteredData;
+            return chartBaseData;
         }
 
-        // Keep the aggregation logic for calculated fields (like count/average)
-        const dataByTown = filteredData.reduce((acc, sale) => {
+        const dataByTown = chartBaseData.reduce((acc, sale) => {
             const town = sale.town;
             if (!acc[town]) acc[town] = { sales: [], count: 0 };
             acc[town].sales.push(sale.sale_amount);
@@ -176,22 +192,19 @@ const App: React.FC = () => {
             total_sale_amount: data.sales.reduce((a, b) => a + b, 0),
             sales_count: data.count,
         }));
-    }, [filteredData, chartDisplay.bar.displayField]);
+    }, [chartBaseData, chartDisplay.bar.displayField]);
 
     const propertyTypeBarChartData = useMemo(() => {
-        // ADDED CHECK: If there's no data, return an empty array immediately
-        if (filteredData.length === 0) {
+        if (chartBaseData.length === 0) {
             return [];
         }
 
         const field = chartDisplay.bar2.displayField;
-        // If the display field is a raw data field, just return the filtered data
         if (field === 'sale_amount' || field === 'assessed_value') {
-            return filteredData;
+            return chartBaseData;
         }
 
-        // Keep the aggregation logic for calculated fields (like count/average)
-        const dataByPropType = filteredData.reduce((acc, sale) => {
+        const dataByPropType = chartBaseData.reduce((acc, sale) => {
             const propType = sale.property_type;
             if (!acc[propType]) acc[propType] = { count: 0, sum_sale_amount: 0, sum_assessed_value: 0 };
             acc[propType].count++;
@@ -206,11 +219,11 @@ const App: React.FC = () => {
             avg_sale_amount: data.sum_sale_amount / data.count,
             total_sale_amount: data.sum_sale_amount,
             avg_assessed_value: data.sum_assessed_value / data.count,
-        })).sort((a,b) => b.count - a.count);
-    }, [filteredData, chartDisplay.bar2.displayField]);
+        })).sort((a, b) => b.count - a.count);
+    }, [chartBaseData, chartDisplay.bar2.displayField]);
 
     const lineChartData = useMemo(() => {
-        const dataByYear = filteredData.reduce((acc, sale) => {
+        const dataByYear = chartBaseData.reduce((acc, sale) => {
             const year = sale.list_year;
             if (!acc[year]) acc[year] = { count: 0 };
             acc[year].count++;
@@ -221,7 +234,7 @@ const App: React.FC = () => {
             year: parseInt(year),
             sales_count: data.count,
         })).sort((a, b) => a.year - b.year);
-    }, [filteredData]);
+    }, [chartBaseData]);
 
     const barChartConfig = useMemo(() => {
         const field = chartDisplay.bar.displayField;
@@ -230,11 +243,9 @@ const App: React.FC = () => {
         let fill = "#F66733";
         let xAxisKey: keyof RealEstateSale | 'town' = "town";
 
-        // Check for raw data fields
         if (field === 'sale_amount' || field === 'assessed_value') {
             yAxisName = field === 'sale_amount' ? 'Sale Amount' : 'Assessed Value';
             yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
-            // When raw data is shown, we use the Town field for grouping/labeling on the X axis, even if it shows all records
             xAxisKey = 'town';
         } else if (field === 'avg_sale_amount' || field === 'total_sale_amount') {
             yAxisName = field === 'avg_sale_amount' ? 'Average Sale Amount' : 'Total Sale Amount';
@@ -245,7 +256,6 @@ const App: React.FC = () => {
         } else {
             yAxisName = field as string;
         }
-        // Ensure xAxisKey is always 'town' for this specific chart
         return { xAxisKey: "town", yAxisKey: field, yAxisName, yAxisTickFormatter, fill };
     }, [chartDisplay.bar.displayField]);
 
@@ -256,12 +266,10 @@ const App: React.FC = () => {
         let fill = "#5b21b6";
         let xAxisKey: keyof RealEstateSale | 'property_type' = "property_type";
 
-        // Check for raw data fields
         if (field === 'sale_amount' || field === 'assessed_value') {
             yAxisName = field === 'sale_amount' ? 'Sale Amount' : 'Assessed Value';
             yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
             fill = "#F66733";
-            // When raw data is shown, we use the Property Type field for grouping/labeling on the X axis
             xAxisKey = 'property_type';
         } else if (field === 'avg_sale_amount' || field === 'total_sale_amount') {
             yAxisName = field === 'avg_sale_amount' ? 'Average Sale Amount' : 'Total Sale Amount';
@@ -276,52 +284,74 @@ const App: React.FC = () => {
         } else {
             yAxisName = field as string;
         }
-        // Ensure xAxisKey is always 'property_type' for this specific chart
         return { xAxisKey: "property_type", yAxisKey: field, yAxisName, yAxisTickFormatter, fill };
     }, [chartDisplay.bar2.displayField]);
 
+    // Define the order of charts for rendering
+    const chartOrder: ChartName[] = ['scatter', 'bar', 'bar2', 'line'];
+
+    const renderChart = (chartName: ChartName, config: ChartConfig[ChartName]) => {
+        // This function now uses the size passed in the config object
+        const className = `bg-gray-800/50 rounded-lg p-4 shadow-lg transition-all duration-500 min-h-[400px] flex flex-col ${getGridClass(config.size)}`;
+
+        const title = (chartName === 'bar' || chartName === 'bar2')
+            ? chartDisplay[chartName].title
+            : config.title;
+
+        return (
+            <div key={chartName} className={className}>
+                <h2 className="text-lg font-semibold text-gray-300 mb-4">{title}</h2>
+                <div className="flex-grow">
+                    {chartName === 'bar' && <BarChartComponent
+                        data={barChartData}
+                        xAxisKey={barChartConfig.xAxisKey}
+                        yAxisKey={barChartConfig.yAxisKey as string}
+                        yAxisName={barChartConfig.yAxisName}
+                        fill={barChartConfig.fill}
+                        yAxisTickFormatter={barChartConfig.yAxisTickFormatter}
+                    />}
+                    {chartName === 'bar2' && <BarChartComponent
+                        data={propertyTypeBarChartData}
+                        xAxisKey={propertyTypeBarChartConfig.xAxisKey}
+                        yAxisKey={propertyTypeBarChartConfig.yAxisKey as string}
+                        yAxisName={propertyTypeBarChartConfig.yAxisName}
+                        fill={propertyTypeBarChartConfig.fill}
+                        yAxisTickFormatter={propertyTypeBarChartConfig.yAxisTickFormatter}
+                    />}
+                    {chartName === 'line' && <LineChartComponent data={lineChartData} />}
+                    {chartName === 'scatter' && <ScatterPlotComponent
+                        data={filteredData}
+                        onPointClick={handlePointClick}
+                        selectedSale={selectedSale}
+                    />}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
-            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
+            <main className="flex-1 p-6 lg:p-10 overflow-y-auto">
                 <h1 className="text-3xl font-bold text-orange-500 mb-6">Real Estate Sales Dashboard</h1>
 
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {Object.entries(chartConfig).map(([key, config]) => {
-                        const chartName = key as ChartName;
-                        const className = `bg-gray-800/50 rounded-lg p-4 shadow-lg transition-all duration-500 min-h-[400px] flex flex-col ${getGridClass(config.size)}`;
-                        return (
-                            <div key={chartName} className={className}>
-                                <h2 className="text-lg font-semibold text-gray-300 mb-4">
-                                    {(chartName === 'bar' || chartName === 'bar2') ? chartDisplay[chartName].title : config.title}
-                                </h2>
-                                <div className="flex-grow">
-                                    {chartName === 'bar' && <BarChartComponent
-                                        data={barChartData}
-                                        xAxisKey={barChartConfig.xAxisKey}
-                                        yAxisKey={barChartConfig.yAxisKey as string}
-                                        yAxisName={barChartConfig.yAxisName}
-                                        fill={barChartConfig.fill}
-                                        yAxisTickFormatter={barChartConfig.yAxisTickFormatter}
-                                    />}
-                                    {chartName === 'bar2' && <BarChartComponent
-                                        data={propertyTypeBarChartData}
-                                        xAxisKey={propertyTypeBarChartConfig.xAxisKey}
-                                        yAxisKey={propertyTypeBarChartConfig.yAxisKey as string}
-                                        yAxisName={propertyTypeBarChartConfig.yAxisName}
-                                        fill={propertyTypeBarChartConfig.fill}
-                                        yAxisTickFormatter={propertyTypeBarChartConfig.yAxisTickFormatter}
-                                    />}
-                                    {chartName === 'line' && <LineChartComponent data={lineChartData} />}
-                                    {chartName === 'scatter' && <ScatterPlotComponent data={filteredData} />}
-                                </div>
-                            </div>
-                        );
-                    })}
+                {/* --- IMPORTANT CHANGE: Use 12 columns --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+                    {/* 1. SCATTER PLOT: Full Width (12/12) */}
+                    {renderChart('scatter', { ...chartConfig.scatter, size: 'full' })}
+
+                    {/* 2. BAR CHART 1 ('Raw Sale Amount'): 1/3 Width (4/12) */}
+                    {renderChart('bar', { ...chartConfig.bar, size: 'small' })}
+
+                    {/* 3. BAR CHART 2 ('Raw Assessed Value'): 1/3 Width (4/12) */}
+                    {renderChart('bar2', { ...chartConfig.bar2, size: 'small' })}
+
+                    {/* 4. LINE CHART ('Sales Trend'): 1/3 Width (4/12) */}
+                    {renderChart('line', { ...chartConfig.line, size: 'small' })}
                 </div>
             </main>
             <aside className="w-full md:w-96 lg:w-[450px] bg-gray-900/80 backdrop-blur-sm border-l border-gray-700/50 flex flex-col h-full max-h-screen">
-                <Chatbot onFunctionCall={handleFunctionCall} salesData={salesData} />
+                <Chatbot onFunctionCall={handleFunctionCall} salesData={salesData} selectedSale={selectedSale} />
             </aside>
         </div>
     );
