@@ -36,8 +36,7 @@ const App: React.FC = () => {
 
     // ⬇️ BEGIN CHANGE: Update the useEffect hook to fetch from the API ⬇️
     useEffect(() => {
-        // ⚠️ IMPORTANT: Replace 'YOUR-RENDER-API-URL' with the actual URL of your deployed Render Web Service!
-        const API_ENDPOINT = 'https://YOUR-RENDER-API-URL.onrender.com/api/sales';
+        const API_ENDPOINT = 'https://four030-dashboard.onrender.com';
 
         fetch(API_ENDPOINT)
             .then(response => {
