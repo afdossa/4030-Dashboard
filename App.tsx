@@ -34,17 +34,22 @@ const App: React.FC = () => {
     });
     const [selectedSale, setSelectedSale] = useState<RealEstateSale | null>(null);
 
+    // ⬇️ BEGIN CHANGE: Update the useEffect hook to fetch from the API ⬇️
     useEffect(() => {
-        fetch(`${import.meta.env.BASE_URL}real_estate_data.json`)
+        // ⚠️ IMPORTANT: Replace 'YOUR-RENDER-API-URL' with the actual URL of your deployed Render Web Service!
+        const API_ENDPOINT = 'https://YOUR-RENDER-API-URL.onrender.com/api/sales';
+
+        fetch(API_ENDPOINT)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    throw new Error(`Network response was not ok: ${response.status}`);
                 }
                 return response.json();
             })
             .then(data => setSalesData(data))
-            .catch(error => console.error('Error fetching real estate data:', error));
+            .catch(error => console.error('Error fetching real estate data from API:', error));
     }, []);
+    // ⬆️ END CHANGE ⬆️
 
     const setChartDisplayField = (chartName: 'bar' | 'bar2', displayField: DisplayField, title: string) => {
         setChartDisplay(prevConfig => ({
