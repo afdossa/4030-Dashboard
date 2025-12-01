@@ -34,10 +34,8 @@ const App: React.FC = () => {
     });
     const [selectedSale, setSelectedSale] = useState<RealEstateSale | null>(null);
 
-    // ⬇️ BEGIN CHANGE: Update the useEffect hook to fetch from the API ⬇️
     useEffect(() => {
-        const API_ENDPOINT = 'https://four030-dashboard.onrender.com';
-
+        const API_ENDPOINT = 'https://four030-dashboard.onrender.com/api/sales';
         fetch(API_ENDPOINT)
             .then(response => {
                 if (!response.ok) {
