@@ -9,7 +9,7 @@ import {
     ResponsiveContainer,
     Tooltip,
     ZAxis
-} from 'recharts'; // Added Tooltip
+} from 'recharts';
 
 interface ScatterPlotProps {
     data: RealEstateSale[];
@@ -43,7 +43,8 @@ const usePropertyColors = (data: RealEstateSale[]) => {
 const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload as RealEstateSale;
-        // Check if data is valid and not the selected point's summary
+        // The scatter payload sometimes includes multiple data points,
+        // we use the actual data object check for safety.
         if (data && data.serial_number) {
             return (
                 <div className="bg-gray-700/90 text-white p-3 border border-gray-600 rounded-lg shadow-xl text-sm">
@@ -61,23 +62,49 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 
 const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, selectedSale }) => {
-    // Filter out rows where sale_amount or assessed_value is zero (to clean up the dense zero-axis lines often seen in raw data)
-    const cleanData = data.filter(d => d.sale_amount > 0 && d.assessed_value > 0);
 
-    // Separate selected sale for different styling
-    const defaultData = cleanData.filter(d => !selectedSale || d.serial_number !== selectedSale.serial_number);
-    const selectedData = selectedSale ? [selectedSale] : [];
+    // 1. OUTLIER FILTERING (BASED ON POWER BI SCREENSHOTS)
+    const MAX_ASSESSED_VALUE = 1500000; // 1.5M
+    const MAX_SALE_AMOUNT = 2000000; // 2.0M
 
-    // Get color map
-    const propertyColorMap = usePropertyColors(cleanData);
+    const filteredAndCleanData = data.filter(d =>
+        // Filter out zero/null values
+        d.sale_amount > 0 && d.assessed_value > 0 &&
+        // Apply outlier limits
+        d.assessed_value <= MAX_ASSESSED_VALUE &&
+        d.sale_amount <= MAX_SALE_AMOUNT
+    );
+
+    // Get color map based on the filtered data set
+    const propertyColorMap = usePropertyColors(filteredAndCleanData);
+
+    // Function to get the color for a point based on its property_type
+    const getColor = (payload: RealEstateSale) => propertyColorMap[payload.property_type] || '#ccc';
+
+    // 2. CLICK BEHAVIOR FIX: Combine data sets but apply selection styling
+    // We will use a single Scatter component and manage colors/radius with a custom function.
 
     // Function to format axis ticks in M (Million)
     const axisFormatter = (value: number) => {
         return value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : `${(value / 1000).toLocaleString()}k`;
     };
 
-    // Function to get the color for a point based on its property_type
-    const getColor = (payload: RealEstateSale) => propertyColorMap[payload.property_type] || '#ccc';
+    // Custom shape function to apply styling based on selection
+    const renderScatterShape = (props: any) => {
+        const isSelected = selectedSale && props.payload.serial_number === selectedSale.serial_number;
+
+        return (
+            <circle
+                cx={props.cx}
+                cy={props.cy}
+                r={isSelected ? 8 : 4} // Large radius for selected point
+                fill={isSelected ? "#F66733" : getColor(props.payload)} // Use contrasting color for selected
+                stroke={isSelected ? "#ffffff" : "none"}
+                strokeWidth={isSelected ? 2 : 0}
+                opacity={isSelected ? 1 : 0.65}
+            />
+        );
+    };
 
     return (
         <ResponsiveContainer width="100%" height="100%">
@@ -94,7 +121,8 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     name="Assessed Value"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    domain={[0, 'dataMax + 100000']} // Ensure the axis starts at 0 and goes slightly past the max
+                    // Domain is now fixed by the outlier filter, but we cap it at the max filter value
+                    domain={[0, MAX_ASSESSED_VALUE]}
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                 />
@@ -106,7 +134,8 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     name="Sale Amount"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    domain={[0, 'dataMax + 100000']} // Ensure the axis starts at 0 and goes slightly past the max
+                    // Domain is now fixed by the outlier filter, but we cap it at the max filter value
+                    domain={[0, MAX_SALE_AMOUNT]}
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                 />
@@ -120,26 +149,12 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     cursor={{ strokeDasharray: '5 5', stroke: '#fff', opacity: 0.5 }}
                 />
 
-                {/* Default Sales Data (colored by property type) */}
+                {/* Combined Scatter Plot (3. FIXED: Single plot to prevent points from moving) */}
                 <Scatter
                     name="Sales Data"
-                    data={defaultData}
-                    fill={getColor} // Use the custom color function
-                    shape="circle"
-                    opacity={0.65}
-                    onClick={({ payload }) => onPointClick(payload as RealEstateSale)}
-                />
-
-                {/* Selected Sale Data (highlighted) */}
-                <Scatter
-                    name="Selected Sale"
-                    data={selectedData}
-                    fill="#F66733" // Use a strong contrasting color (Orange)
-                    shape="circle"
-                    stroke="#ffffff"
-                    strokeWidth={2}
-                    radius={8}
-                    opacity={1}
+                    data={filteredAndCleanData}
+                    // We don't use the fill property here; the color is managed in the shape function
+                    shape={renderScatterShape}
                     onClick={({ payload }) => onPointClick(payload as RealEstateSale)}
                 />
             </ScatterChart>
