@@ -19,8 +19,8 @@ interface ScatterPlotProps {
 
 // Custom hook to generate consistent colors for property types
 const usePropertyColors = (data: RealEstateSale[]) => {
-    // ... (Color logic remains the same)
-    const uniquePropertyTypes = Array.from(new Set(data.map(d => d.property_type))).sort();
+    // We use a React hook to memoize the colors based on the data to prevent unnecessary re-calculation
+    const uniquePropertyTypes = React.useMemo(() => Array.from(new Set(data.map(d => d.property_type))).sort(), [data]);
     const colors = [
         '#6366f1', // Indigo 500
         '#f59e0b', // Amber 500
@@ -32,12 +32,11 @@ const usePropertyColors = (data: RealEstateSale[]) => {
         '#f97316', // Orange 500
         '#84cc16', // Lime 500
         '#ec4899', // Pink 500
-        // Add more colors if needed
     ];
-    return uniquePropertyTypes.reduce((acc, type, index) => {
+    return React.useMemo(() => uniquePropertyTypes.reduce((acc, type, index) => {
         acc[type] = colors[index % colors.length];
         return acc;
-    }, {} as Record<string, string>);
+    }, {} as Record<string, string>), [uniquePropertyTypes]);
 };
 
 // Custom Tooltip component to display full details
@@ -62,17 +61,15 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, selectedSale }) => {
 
-    // **1. REFINED OUTLIER FILTERING**
-    // Based on the new image (image_ee1a85.png) which clearly caps the axes:
-    // X-Axis (Assessed Value) max around 1.5M
-    // Y-Axis (Sale Amount) max around 2.0M
+    // **1. STRICT OUTLIER FILTERING**
+    // Based on image_ee101c.png's axis maximums (Y: 2.0M, X: 1.5M)
     const MAX_ASSESSED_VALUE = 1500000;
     const MAX_SALE_AMOUNT = 2000000;
 
     const filteredAndCleanData = data.filter(d =>
         // Filter out zero/null values
         d.sale_amount > 0 && d.assessed_value > 0 &&
-        // Apply outlier limits
+        // Apply strict outlier limits
         d.assessed_value <= MAX_ASSESSED_VALUE &&
         d.sale_amount <= MAX_SALE_AMOUNT
     );
@@ -87,7 +84,7 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
         return value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : `${(value / 1000).toLocaleString()}k`;
     };
 
-    // Custom shape function to apply styling based on selection and color
+    // **2. COLOR AND SELECTION FIX (Custom Shape)**
     const renderScatterShape = (props: any) => {
         const isSelected = selectedSale && props.payload.serial_number === selectedSale.serial_number;
 
@@ -95,12 +92,14 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
             <circle
                 cx={props.cx}
                 cy={props.cy}
-                // Reduce the radius of unselected points to reduce overlap and clicking ambiguity
+                // Smallest radius (2.5) to minimize overlap and selection ambiguity
                 r={isSelected ? 8 : 2.5}
-                fill={isSelected ? "#F66733" : getColor(props.payload)} // Use contrasting color for selected
+                fill={isSelected ? "#F66733" : getColor(props.payload)} // Apply calculated color or selected color
                 stroke={isSelected ? "#ffffff" : "none"}
                 strokeWidth={isSelected ? 2 : 0}
                 opacity={isSelected ? 1 : 0.7}
+                // Add key to help Recharts handle rendering updates
+                key={props.payload.serial_number}
             />
         );
     };
@@ -113,30 +112,31 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
             >
                 <CartesianGrid stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" />
 
+                {/* X-Axis: Assessed Value - Domain fixed by the filter */}
                 <XAxis
                     type="number"
                     dataKey="assessed_value"
                     name="Assessed Value"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    // Fix domain to the max filter value
                     domain={[0, MAX_ASSESSED_VALUE]}
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                 />
 
+                {/* Y-Axis: Sale Amount - Domain fixed by the filter */}
                 <YAxis
                     type="number"
                     dataKey="sale_amount"
                     name="Sale Amount"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    // Fix domain to the max filter value
                     domain={[0, MAX_SALE_AMOUNT]}
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                 />
 
+                {/* Z-Axis (Still needed for recharts, even if color is managed by shape function) */}
                 <ZAxis dataKey="property_type" type="category" range={[10, 100]} />
 
                 <Tooltip
@@ -147,10 +147,10 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                 <Scatter
                     name="Sales Data"
                     data={filteredAndCleanData}
+                    // **CRITICAL FIX**: Use the custom render function to apply both color and selection styling
                     shape={renderScatterShape}
-                    // **2. SELECTION FIX:** Ensure we only call onPointClick with the first payload element
                     onClick={(e: any) => {
-                        // The 'e' object passed by recharts contains the event and the payload data
+                        // **CRITICAL FIX**: Ensure we only pass the payload for selection
                         if (e && e.payload) {
                             onPointClick(e.payload as RealEstateSale);
                         }
