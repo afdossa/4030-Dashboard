@@ -5,7 +5,7 @@ const cors = require('cors');
 // 1. DATABASE CONNECTION CONFIGURATION
 const client = new Client({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, // Necessary for Render's external connections
+    ssl: { rejectUnauthorized: false },
 });
 
 client.connect()
@@ -13,19 +13,18 @@ client.connect()
     .catch(err => console.error('Database connection error. Ensure the service is linked to the database and credentials are correct.', err.stack));
 
 const app = express();
-// Ensure the port is correctly grabbed from the environment
+// Default to 3000, but Render uses the PORT environment variable
 const PORT = process.env.PORT || 3000;
 
-// 2. CORS POLICY CONFIGURATION (FIX)
+// 2. CORS POLICY CONFIGURATION
 const allowedOrigins = [
-    'https://afdossa.github.io', // **CRITICAL FIX: Allows your GitHub Pages domain to access the API**
+    'https://afdossa.github.io',
     'https://four030-dashboard.onrender.com',
     'http://localhost:5173'
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl)
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
@@ -42,8 +41,47 @@ app.get('/', (req, res) => {
 
 app.get('/api/sales', async (req, res) => {
     try {
-        // **CRITICAL FIX: LIMIT the query to prevent Node.js Heap Out of Memory crash**
-        const result = await client.query('SELECT * FROM real_estate_sales LIMIT 1000');
+        const limitCount = 10000;
+
+        // Define the WHERE clause filters once for clean data retrieval
+        const whereClause = `
+            assessed_value IS NOT NULL 
+            AND sale_amount IS NOT NULL 
+            AND CAST(assessed_value AS numeric) > 1 
+            AND CAST(sale_amount AS numeric) > 1
+        `;
+
+        // 1. Get the total count of filtered rows (FAST operation)
+        const countQuery = `
+            SELECT COUNT(*) FROM real_estate_sales WHERE ${whereClause};
+        `;
+        const countResult = await client.query(countQuery);
+        const totalRows = parseInt(countResult.rows[0].count, 10);
+
+        // Handle case where no rows are returned
+        if (totalRows === 0) {
+            return res.json([]);
+        }
+
+        // 2. Calculate a random offset to sample data
+        // Ensure offset doesn't exceed the bounds of the total data
+        const maxOffset = Math.max(0, totalRows - limitCount);
+        const offset = Math.floor(Math.random() * maxOffset);
+
+        // 3. Fetch the data using the random OFFSET (MUCH faster than ORDER BY RANDOM())
+        const dataQuery = `
+            SELECT 
+                property_type, 
+                CAST(assessed_value AS numeric) AS assessed_value, 
+                CAST(sale_amount AS numeric) AS sale_amount 
+            FROM 
+                real_estate_sales
+            WHERE 
+                ${whereClause}
+            LIMIT ${limitCount} OFFSET ${offset};
+        `;
+
+        const result = await client.query(dataQuery);
 
         res.json(result.rows);
     } catch (err) {
@@ -55,4 +93,3 @@ app.get('/api/sales', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`API Server listening on port ${PORT}`);
 });
-//MVP
