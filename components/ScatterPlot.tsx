@@ -18,37 +18,23 @@ interface ScatterPlotProps {
     selectedSale: RealEstateSale | null;
 }
 
-// Custom hook: ensures 'Residential' is red and generates other colors
+// Custom hook to generate consistent colors for property types (no change needed here)
 const usePropertyColors = (data: RealEstateSale[]) => {
     const uniquePropertyTypes = React.useMemo(() => Array.from(new Set(data.map(d => d.property_type))).sort(), [data]);
-    const standardColors = [
-        '#6366f1', '#f59e0b', '#10b981', '#06b6d4', '#eab308',
-        '#a855f7', '#f97316', '#84cc16', '#ec4899', '#4b5563',
-        '#34d399', '#fcd34d', '#a78bfa',
+    const colors = [
+        '#6366f1', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#eab308',
+        '#a855f7', '#f97316', '#84cc16', '#ec4899', '#4b5563', '#34d399',
+        '#fcd34d', '#a78bfa',
     ];
-
-    return React.useMemo(() => {
-        const acc: Record<string, string> = {};
-        let colorIndex = 0;
-
-        if (uniquePropertyTypes.includes('Residential')) {
-            acc['Residential'] = '#ef4444'; // Red
-        }
-
-        for (const type of uniquePropertyTypes) {
-            if (type !== 'Residential') {
-                let color = standardColors[colorIndex % standardColors.length];
-                colorIndex++;
-                acc[type] = color;
-            }
-        }
+    return React.useMemo(() => uniquePropertyTypes.reduce((acc, type, index) => {
+        acc[type] = colors[index % colors.length];
         return acc;
-    }, [uniquePropertyTypes]);
+    }, {} as Record<string, string>), [uniquePropertyTypes]);
 };
 
+// Custom Tooltip component (no change needed here)
 const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
-        // Use the original (non-jittered) values for display
         const data = payload[0].payload as RealEstateSale;
         if (data && data.serial_number) {
             return (
@@ -68,40 +54,24 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, selectedSale }) => {
 
-    // Jitter function: adds a tiny random offset to the coordinate
-    const applyJitter = (value: number, range: number) => {
-        const jitterAmount = (Math.random() - 0.5) * range;
-        return value + jitterAmount;
-    };
+    // Filter out rows where sale_amount or assessed_value is zero
+    const filteredAndCleanData = data.filter(d =>
+        d.sale_amount > 0 && d.assessed_value > 0
+    );
 
-    // Filter, clean, and JITTER the data (FIXED FOR NAN ERROR)
-    const filteredAndJitteredData = React.useMemo(() => {
-        return data
-            .filter(d =>
-                // Ensure data is robustly numeric and positive before plotting/jittering
-                typeof d.sale_amount === 'number' && isFinite(d.sale_amount) && d.sale_amount > 0 &&
-                typeof d.assessed_value === 'number' && isFinite(d.assessed_value) && d.assessed_value > 0
-            )
-            .map(d => ({
-                ...d,
-                // Use a small range (e.g., +/- 1000) for visual separation
-                sale_amount_j: applyJitter(d.sale_amount, 2000),
-                assessed_value_j: applyJitter(d.assessed_value, 2000),
-            }));
-    }, [data]);
-
-    const propertyColorMap = usePropertyColors(filteredAndJitteredData);
-    const uniquePropertyTypes = Array.from(new Set(filteredAndJitteredData.map(d => d.property_type))).sort();
+    const propertyColorMap = usePropertyColors(filteredAndCleanData);
+    const uniquePropertyTypes = Array.from(new Set(filteredAndCleanData.map(d => d.property_type))).sort();
 
     const getColor = (payload: RealEstateSale) => propertyColorMap[payload.property_type] || '#ccc';
 
     const axisFormatter = (value: number) => {
+        // Only format if value is high, otherwise show as-is
         if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
         if (value >= 1000) return `${(value / 1000).toLocaleString()}k`;
         return value.toLocaleString();
     };
 
-    // Custom shape function to apply styling based on selection and color
+    // Custom shape function to apply styling based on selection and color (kept as is)
     const renderScatterShape = (props: any) => {
         const isSelected = selectedSale && props.payload.serial_number === selectedSale.serial_number;
         const color = getColor(props.payload);
@@ -110,8 +80,9 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
             <circle
                 cx={props.cx}
                 cy={props.cy}
+                // Increased size slightly (from 2.5 to 3/6) for better click target
                 r={isSelected ? 6 : 3}
-                fill={isSelected ? "#ff00ff" : color}
+                fill={isSelected ? "#ff00ff" : color} // Neon color for selection
                 stroke={isSelected ? "#ffffff" : color}
                 strokeWidth={isSelected ? 2 : 0}
                 opacity={isSelected ? 1 : 0.6}
@@ -121,6 +92,7 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
         );
     };
 
+    // Custom Legend component (no change needed here)
     const CustomLegend = () => (
         <div className="bg-gray-700/50 p-3 rounded-lg text-sm max-h-full overflow-y-auto">
             <h4 className="font-bold text-gray-300 mb-2">Property Type Legend</h4>
@@ -146,7 +118,7 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
 
                 <XAxis
                     type="number"
-                    dataKey="sale_amount_j" // Using jittered X-coordinate
+                    dataKey="sale_amount"
                     name="Sale Amount"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
@@ -158,7 +130,7 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
 
                 <YAxis
                     type="number"
-                    dataKey="assessed_value_j" // Using jittered Y-coordinate
+                    dataKey="assessed_value"
                     name="Assessed Value"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
@@ -185,10 +157,10 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
 
                 <Scatter
                     name="Sales Data"
-                    data={filteredAndJitteredData}
+                    data={filteredAndCleanData}
                     shape={renderScatterShape}
                     onMouseDown={(e: any) => {
-                        // FIX: Force single selection by checking if payload is an array and taking only the first item
+                        // 🚨 FIX: Force single selection by checking if payload is an array and taking only the first item 🚨
                         const clickedPayload = Array.isArray(e.payload) ? e.payload[0] : e.payload;
 
                         if (clickedPayload && clickedPayload.serial_number) {
