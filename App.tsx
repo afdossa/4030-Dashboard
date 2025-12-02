@@ -22,7 +22,7 @@ const App: React.FC = () => {
         bar: { size: 'small', title: 'Raw Sale Amount by Town' },
         bar2: { size: 'small', title: 'Raw Assessed Value by Property Type' },
         line: { size: 'small', title: 'Sales Trend Over Years' },
-        scatter: { size: 'full', title: 'Assessed Value vs. Sale Amount' },
+        scatter: { size: 'full', title: 'property_type, assessed_value and sale_amount' }, // <-- FINAL TITLE
     });
     const [chartDisplay, setChartDisplay] = useState<ChartDisplayConfig>({
         bar: { displayField: 'sale_amount', title: 'Raw Sale Amount by Town' },
@@ -46,7 +46,6 @@ const App: React.FC = () => {
             .then(data => setSalesData(data))
             .catch(error => console.error('Error fetching real estate data from API:', error));
     }, []);
-    // ⬆️ END CHANGE ⬆️
 
     const setChartDisplayField = (chartName: 'bar' | 'bar2', displayField: DisplayField, title: string) => {
         setChartDisplay(prevConfig => ({
@@ -274,7 +273,6 @@ const App: React.FC = () => {
             yAxisName = field === 'sale_amount' ? 'Sale Amount' : 'Assessed Value';
             yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
             fill = "#F66733";
-            xAxisKey = 'property_type';
         } else if (field === 'avg_sale_amount' || field === 'total_sale_amount') {
             yAxisName = field === 'avg_sale_amount' ? 'Average Sale Amount' : 'Total Sale Amount';
             yAxisTickFormatter = (value: number) => `$${Number(value).toLocaleString()}`;
@@ -367,7 +365,7 @@ const App: React.FC = () => {
             {/* **REPLACED ASIDE WITH FLOATING PANEL/MODAL** */}
             <div
                 className={`fixed top-0 right-0 w-full md:w-96 lg:w-[450px] bg-gray-900/80 backdrop-blur-sm border-l border-gray-700/50 flex flex-col h-full max-h-screen z-50 transition-transform duration-300 ease-in-out
-                ${isAssistantOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                ${isAssistantOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
                 {/* Close Button at the top of the assistant */}
                 <button
