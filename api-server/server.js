@@ -44,24 +44,20 @@ app.get('/', (req, res) => {
 app.get('/api/sales', async (req, res) => {
     try {
         // OPTIMIZED QUERY FOR SCATTER PLOT
-        // 1. Selects only the 3 needed columns.
-        // 2. Filters out missing/zero values for clean visualization.
-        // 3. Orders by RANDOM() to get a representative sample.
-        // 4. LIMITs to 10,000 records to balance visual density and 512MB memory.
         const queryText = `
-            SELECT 
-                property_type, 
-                assessed_value::numeric, 
-                sale_amount::numeric 
-            FROM 
+            SELECT
+                property_type,
+                assessed_value::numeric,
+                sale_amount::numeric
+            FROM
                 real_estate_sales
-            WHERE 
-                assessed_value IS NOT NULL 
-                AND sale_amount IS NOT NULL 
-                AND assessed_value > 0
-                AND sale_amount > 0
+            WHERE
+                assessed_value IS NOT NULL
+              AND sale_amount IS NOT NULL
+              AND assessed_value > 0
+              AND sale_amount > 0
             ORDER BY RANDOM()
-            LIMIT 10000;
+                LIMIT 10000;
         `;
 
         const result = await client.query(queryText);
@@ -74,5 +70,5 @@ app.get('/api/sales', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(\`API Server listening on port \${PORT}\`);
+    console.log(`API Server listening on port ${PORT}`);
 });
