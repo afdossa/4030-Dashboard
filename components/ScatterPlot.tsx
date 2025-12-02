@@ -8,7 +8,8 @@ import {
     CartesianGrid,
     ResponsiveContainer,
     Tooltip,
-    ZAxis
+    ZAxis,
+    Legend
 } from 'recharts';
 
 interface ScatterPlotProps {
@@ -31,6 +32,10 @@ const usePropertyColors = (data: RealEstateSale[]) => {
         '#f97316', // Orange 500
         '#84cc16', // Lime 500
         '#ec4899', // Pink 500
+        '#4b5563', // Gray
+        '#34d399', // Light Emerald
+        '#fcd34d', // Light Amber
+        '#a78bfa', // Light Purple
     ];
     return React.useMemo(() => uniquePropertyTypes.reduce((acc, type, index) => {
         acc[type] = colors[index % colors.length];
@@ -60,13 +65,13 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, selectedSale }) => {
 
-    // Filter out rows where sale_amount or assessed_value is zero (to clean up the dense zero-axis lines often seen in raw data)
-    // The API now handles the outlier filtering.
+    // Filter out rows where sale_amount or assessed_value is zero (The API handles the upper bounds)
     const filteredAndCleanData = data.filter(d =>
         d.sale_amount > 0 && d.assessed_value > 0
     );
 
     const propertyColorMap = usePropertyColors(filteredAndCleanData);
+    const uniquePropertyTypes = Array.from(new Set(filteredAndCleanData.map(d => d.property_type))).sort();
 
     const getColor = (payload: RealEstateSale) => propertyColorMap[payload.property_type] || '#ccc';
 
@@ -93,34 +98,54 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
         );
     };
 
+    // **LEGEND FIX:** Custom Legend component
+    const CustomLegend = () => (
+        <div className="bg-gray-700/50 p-3 rounded-lg text-sm max-h-full overflow-y-auto">
+            <h4 className="font-bold text-gray-300 mb-2">Property Type Legend</h4>
+            <ul className="grid grid-cols-1 gap-x-4 gap-y-1">
+                {uniquePropertyTypes.map(type => (
+                    <li key={type} className="flex items-center text-gray-400">
+                        <span style={{ backgroundColor: propertyColorMap[type] }}
+                              className="inline-block w-3 h-3 rounded-full mr-2 opacity-70"></span>
+                        {type}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+
     return (
         <ResponsiveContainer width="100%" height="100%">
             <ScatterChart
-                margin={{ top: 10, right: 10, bottom: 0, left: 10 }}
+                // Adjusted right margin to make space for the vertical legend
+                margin={{ top: 10, right: 100, bottom: 20, left: 10 }}
                 cursor="default"
             >
                 <CartesianGrid stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" />
 
+                {/* X-Axis: Assessed Value (Numeric) */}
                 <XAxis
                     type="number"
                     dataKey="assessed_value"
                     name="Assessed Value"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    domain={[0, 'auto']} // Let Recharts automatically scale to the max value of the filtered data
+                    domain={[0, 'auto']}
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
+                    label={{ value: 'Assessed Value', position: 'bottom', fill: '#9ca3af', dy: 10 }}
                 />
 
+                {/* Y-Axis: Property Type (Categorical) - For the Power BI Strip Plot Look */}
                 <YAxis
-                    type="number"
-                    dataKey="sale_amount"
-                    name="Sale Amount"
+                    type="category"
+                    dataKey="property_type"
+                    name="Property Type"
                     stroke="#9ca3af"
-                    tickFormatter={axisFormatter}
-                    domain={[0, 'auto']} // Let Recharts automatically scale to the max value of the filtered data
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
+                    scale="point"
+                    allowDuplicatedCategory={false}
                 />
 
                 <ZAxis dataKey="property_type" type="category" range={[10, 100]} />
@@ -128,6 +153,15 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                 <Tooltip
                     content={<CustomTooltip />}
                     cursor={{ strokeDasharray: '5 5', stroke: '#fff', opacity: 0.5 }}
+                />
+
+                {/* LEGEND FIX: Place the custom component inside the Legend wrapper */}
+                <Legend
+                    content={<CustomLegend />}
+                    layout="vertical"
+                    align="right"
+                    verticalAlign="middle"
+                    wrapperStyle={{ top: 0, right: 0, padding: '10px' }}
                 />
 
                 <Scatter
