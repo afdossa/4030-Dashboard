@@ -5,7 +5,8 @@ const cors = require('cors');
 // 1. DATABASE CONNECTION CONFIGURATION
 const client = new Client({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, // Necessary for Render's external connections
+    // Necessary for Render's external connections if using SSL
+    ssl: { rejectUnauthorized: false },
 });
 
 client.connect()
@@ -16,9 +17,9 @@ const app = express();
 // Ensure the port is correctly grabbed from the environment
 const PORT = process.env.PORT || 3000;
 
-// 2. CORS POLICY CONFIGURATION (FIX)
+// 2. CORS POLICY CONFIGURATION
 const allowedOrigins = [
-    'https://afdossa.github.io', // **CRITICAL FIX: Allows your GitHub Pages domain to access the API**
+    'https://afdossa.github.io', // Your GitHub Pages domain
     'https://four030-dashboard.onrender.com',
     'http://localhost:5173'
 ];
@@ -42,8 +43,28 @@ app.get('/', (req, res) => {
 
 app.get('/api/sales', async (req, res) => {
     try {
-        // **CRITICAL FIX: LIMIT the query to prevent Node.js Heap Out of Memory crash**
-        const result = await client.query('SELECT * FROM real_estate_sales LIMIT 1000');
+        // OPTIMIZED QUERY FOR SCATTER PLOT
+        // 1. Selects only the 3 needed columns.
+        // 2. Filters out missing/zero values for clean visualization.
+        // 3. Orders by RANDOM() to get a representative sample.
+        // 4. LIMITs to 10,000 records to balance visual density and 512MB memory.
+        const queryText = `
+            SELECT 
+                property_type, 
+                assessed_value::numeric, 
+                sale_amount::numeric 
+            FROM 
+                real_estate_sales
+            WHERE 
+                assessed_value IS NOT NULL 
+                AND sale_amount IS NOT NULL 
+                AND assessed_value > 0
+                AND sale_amount > 0
+            ORDER BY RANDOM()
+            LIMIT 10000;
+        `;
+
+        const result = await client.query(queryText);
 
         res.json(result.rows);
     } catch (err) {
@@ -53,5 +74,5 @@ app.get('/api/sales', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`API Server listening on port ${PORT}`);
+    console.log(\`API Server listening on port \${PORT}\`);
 });
