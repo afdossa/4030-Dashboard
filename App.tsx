@@ -3,6 +3,7 @@ import type { RealEstateSale, ChartConfig, ChartName, ChartSize, FilterState } f
 import BarChartComponent from './components/BarChart';
 import LineChartComponent from './components/LineChart';
 import ScatterPlotComponent from './components/ScatterPlot';
+import LowerScatterComponent from './components/LowerScatter';
 import Chatbot from './components/Chatbot';
 
 type DisplayField = keyof RealEstateSale | 'sales_count' | 'avg_sale_amount' | 'count' | 'avg_assessed_value' | 'total_sale_amount';
@@ -225,19 +226,42 @@ const App: React.FC = () => {
         })).sort((a, b) => b.count - a.count);
     }, [chartBaseData, chartDisplay.bar2.displayField]);
 
+    // --- START: Line Chart Data Aggregation (FIX) ---
     const lineChartData = useMemo(() => {
-        const dataByYear = chartBaseData.reduce((acc, sale) => {
-            const year = sale.list_year;
-            if (!acc[year]) acc[year] = { count: 0 };
-            acc[year].count++;
-            return acc;
-        }, {} as Record<number, { count: number }>);
+        // Function to aggregate data by town to get Averages for Sale vs Assessed plot
+        const aggregateSalesData = (rawData: RealEstateSale[]) => {
+            const townAggregates = new Map<string, { totalSale: number, totalAssessed: number, count: number }>();
 
-        return Object.entries(dataByYear).map(([year, data]) => ({
-            year: parseInt(year),
-            sales_count: data.count,
-        })).sort((a, b) => a.year - b.year);
+            rawData.forEach(d => {
+                // Ensure valid numbers before aggregation
+                if (typeof d.sale_amount !== 'number' || typeof d.assessed_value !== 'number' || d.sale_amount <= 0) return;
+
+                const key = d.town;
+                if (!townAggregates.has(key)) {
+                    townAggregates.set(key, { totalSale: 0, totalAssessed: 0, count: 0 });
+                }
+
+                const agg = townAggregates.get(key)!;
+                agg.totalSale += d.sale_amount;
+                agg.totalAssessed += d.assessed_value;
+                agg.count += 1;
+            });
+
+            return Array.from(townAggregates.entries())
+                .map(([town, agg]) => ({
+                    town: town,
+                    // Calculate Averages for the Line Chart
+                    sale_amount: Math.round(agg.totalSale / agg.count),
+                    assessed_value: Math.round(agg.totalAssessed / agg.count),
+                }))
+                // Sorting is CRITICAL for a clean line chart (sort by X-Axis: sale_amount)
+                .sort((a, b) => a.sale_amount - b.sale_amount);
+        };
+
+        // Use the new aggregation function on the chartBaseData
+        return aggregateSalesData(chartBaseData);
     }, [chartBaseData]);
+    // --- END: Line Chart Data Aggregation (FIX) ---
 
     const barChartConfig = useMemo(() => {
         const field = chartDisplay.bar.displayField;
@@ -312,15 +336,18 @@ const App: React.FC = () => {
                         fill={barChartConfig.fill}
                         yAxisTickFormatter={barChartConfig.yAxisTickFormatter}
                     />}
-                    {chartName === 'bar2' && <BarChartComponent
-                        data={propertyTypeBarChartData}
-                        xAxisKey={propertyTypeBarChartConfig.xAxisKey}
-                        yAxisKey={propertyTypeBarChartConfig.yAxisKey as string}
-                        yAxisName={propertyTypeBarChartConfig.yAxisName}
-                        fill={propertyTypeBarChartConfig.fill}
-                        yAxisTickFormatter={propertyTypeBarChartConfig.yAxisTickFormatter}
+                    {/* 🚨 REPLACING BarChartComponent with LowerScatterComponent for chartName 'bar2' */}
+                    {chartName === 'bar2' && <LowerScatterComponent
+                        data={filteredData} // Assuming LowerScatter needs raw data filtered by controls
+                        onPointClick={handlePointClick}
+                        selectedSale={selectedSale}
                     />}
-                    {chartName === 'line' && <LineChartComponent data={lineChartData} />}
+                    {chartName === 'line' && (
+                        <LineChartComponent
+                            data={filteredData}
+                            selectedSale={selectedSale}
+                        />
+                    )}
                     {chartName === 'scatter' && <ScatterPlotComponent
                         data={filteredData}
                         onPointClick={handlePointClick}

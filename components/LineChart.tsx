@@ -1,39 +1,67 @@
-
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
+import type { RealEstateSale } from '../types';
 
 interface LineChartProps {
-  data: { year: number; sales_count: number }[];
+    data: RealEstateSale[];
+    selectedSale: RealEstateSale | null;
 }
 
-const LineChartComponent: React.FC<LineChartProps> = ({ data }) => {
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart
-        data={data}
-        margin={{
-          top: 5,
-          right: 30,
-          left: 20,
-          bottom: 5,
-        }}
-      >
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-        <XAxis dataKey="year" stroke="#9ca3af" />
-        <YAxis stroke="#9ca3af" />
-        <Tooltip 
-            contentStyle={{
-                backgroundColor: 'rgba(49, 24, 98, 0.9)',
-                border: '1px solid #5b21b6',
-                color: '#e5e7eb',
-                backdropFilter: 'blur(4px)'
-            }}
-        />
-        <Legend />
-        <Line type="monotone" dataKey="sales_count" name="Number of Sales" stroke="#5b21b6" strokeWidth={2} activeDot={{ r: 8 }} />
-      </LineChart>
-    </ResponsiveContainer>
-  );
+const LineChartComponent: React.FC<LineChartProps> = ({ data, selectedSale }) => {
+    const cleaned = React.useMemo(
+        () =>
+            data
+                .map(d => ({
+                    town: d.town,
+                    sale_amount: Number(d.sale_amount),
+                    assessed_value: Number(d.assessed_value)
+                }))
+                .filter(d => d.sale_amount > 0 && d.assessed_value > 0),
+        [data]
+    );
+
+    const selectedTown = selectedSale ? selectedSale.town : null;
+
+    const dataset = React.useMemo(() => {
+        if (!selectedTown) {
+            return cleaned.sort((a, b) => a.sale_amount - b.sale_amount);
+        }
+
+        const townData = cleaned
+            .filter(d => d.town === selectedTown)
+            .sort((a, b) => a.sale_amount - b.sale_amount);
+
+        return townData.length > 0 ? townData : cleaned;
+    }, [cleaned, selectedTown]);
+
+    if (dataset.length === 0) {
+        return (
+            <div className="text-gray-400 p-4 text-center">
+                No data available for line chart
+            </div>
+        );
+    }
+
+    return (
+        <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={dataset} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.15)" strokeDasharray="3 3" />
+                <XAxis dataKey="sale_amount" stroke="#9ca3af" />
+                <YAxis dataKey="assessed_value" stroke="#9ca3af" />
+                <Tooltip formatter={(v: number) => v.toLocaleString()} />
+                <Legend />
+                <Line
+                    type="monotone"
+                    dataKey="assessed_value"
+                    name={selectedTown ? `${selectedTown} Trend` : "Sale vs Assessment Trend"}
+                    stroke="#3b82f6"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={false}
+                />
+            </LineChart>
+        </ResponsiveContainer>
+    );
 };
 
 export default LineChartComponent;

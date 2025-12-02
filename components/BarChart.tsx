@@ -1,44 +1,60 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import type { RealEstateSale } from '../types';
 
 interface BarChartProps {
-    data: any[];
-    xAxisKey: string;
-    yAxisKey: string;
-    yAxisName: string;
-    fill: string;
-    yAxisTickFormatter?: (value: any) => string;
+    data: RealEstateSale[];
+    selectedSale: RealEstateSale | null;
 }
 
-const BarChartComponent: React.FC<BarChartProps> = ({ data, xAxisKey, yAxisKey, yAxisName, fill, yAxisTickFormatter }) => {
+const BarChartComponent: React.FC<BarChartProps> = ({ data, selectedSale }) => {
+    const cleaned = React.useMemo(
+        () =>
+            data.map(d => ({
+                ...d,
+                sale_amount: Number(d.sale_amount),
+                assessed_value: Number(d.assessed_value)
+            })),
+        [data]
+    );
+
+    const filtered = cleaned.filter(
+        d => d.sale_amount > 0 && d.assessed_value > 0
+    );
+
+    const grouped = React.useMemo(() => {
+        const m: Record<string, { total: number; count: number }> = {};
+        for (const d of filtered) {
+            if (!m[d.property_type]) m[d.property_type] = { total: 0, count: 0 };
+            m[d.property_type].total += d.assessed_value;
+            m[d.property_type].count += 1;
+        }
+        return Object.entries(m).map(([type, x]) => ({
+            property_type: type,
+            assessed_value: x.count > 0 ? x.total / x.count : 0
+        }));
+    }, [filtered]);
+
+    const selectedType = selectedSale?.property_type ?? null;
+
+    const displayed = React.useMemo(() => {
+        if (!selectedType) return grouped;
+        return grouped.filter(g => g.property_type === selectedType);
+    }, [grouped, selectedType]);
+
     return (
         <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-                data={data}
-                margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                }}
-            >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-                <XAxis dataKey={xAxisKey} stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                <YAxis stroke="#9ca3af" tickFormatter={yAxisTickFormatter} />
-                <Tooltip
-                    contentStyle={{
-                        backgroundColor: 'rgba(49, 24, 98, 0.9)',
-                        border: '1px solid #5b21b6',
-                        color: '#e5e7eb',
-                        backdropFilter: 'blur(4px)'
-                    }}
-                    formatter={(value: number) => {
-                        const formattedValue = yAxisTickFormatter ? yAxisTickFormatter(value) : value.toLocaleString();
-                        return [formattedValue, yAxisName];
-                    }}
-                />
+            <BarChart data={displayed} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.15)" strokeDasharray="3 3" />
+                <XAxis dataKey="property_type" stroke="#9ca3af" />
+                <YAxis stroke="#9ca3af" />
+                <Tooltip formatter={(v: number) => v.toLocaleString()} />
                 <Legend />
-                <Bar dataKey={yAxisKey} fill={fill} name={yAxisName} />
+                <Bar
+                    dataKey="assessed_value"
+                    name="Average Assessed Value"
+                    fill="#f59e0b"
+                />
             </BarChart>
         </ResponsiveContainer>
     );

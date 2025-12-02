@@ -8,7 +8,6 @@ import {
     CartesianGrid,
     ResponsiveContainer,
     Tooltip,
-    ZAxis,
     Legend
 } from 'recharts';
 
@@ -18,90 +17,123 @@ interface ScatterPlotProps {
     selectedSale: RealEstateSale | null;
 }
 
-// Custom hook to generate consistent colors for property types (no change needed here)
 const usePropertyColors = (data: RealEstateSale[]) => {
-    const uniquePropertyTypes = React.useMemo(() => Array.from(new Set(data.map(d => d.property_type))).sort(), [data]);
-    const colors = [
-        '#6366f1', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#eab308',
-        '#a855f7', '#f97316', '#84cc16', '#ec4899', '#4b5563', '#34d399',
-        '#fcd34d', '#a78bfa',
+    const uniquePropertyTypes = React.useMemo(
+        () => Array.from(new Set(data.map(d => d.property_type))).sort(),
+        [data]
+    );
+
+    const standardColors = [
+        '#6366f1', '#f59e0b', '#10b9b9', '#06b6d4', '#eab308', '#a855f7',
+        '#f97316', '#84cc16', '#ec4899', '#4b5563', '#34d399',
+        '#fcd34d', '#a78bfa'
     ];
-    return React.useMemo(() => uniquePropertyTypes.reduce((acc, type, index) => {
-        acc[type] = colors[index % colors.length];
+
+    return React.useMemo(() => {
+        const acc: Record<string, string> = {};
+        let i = 0;
+
+        if (uniquePropertyTypes.includes('Residential')) {
+            acc['Residential'] = '#ef4444';
+        }
+
+        for (const type of uniquePropertyTypes) {
+            if (type !== 'Residential') {
+                acc[type] = standardColors[i % standardColors.length];
+                i++;
+            }
+        }
         return acc;
-    }, {} as Record<string, string>), [uniquePropertyTypes]);
+    }, [uniquePropertyTypes]);
 };
 
-// Custom Tooltip component (no change needed here)
 const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
-        const data = payload[0].payload as RealEstateSale;
-        if (data && data.serial_number) {
-            return (
-                <div className="bg-gray-700/90 text-white p-3 border border-gray-600 rounded-lg shadow-xl text-sm">
-                    <p className="font-bold mb-1">{data.property_type}</p>
-                    <p>Sale: ${data.sale_amount.toLocaleString()}</p>
-                    <p>Assessed: ${data.assessed_value.toLocaleString()}</p>
-                    <p>Town: {data.town}</p>
-                    <p className="text-gray-400 mt-1">Click to select</p>
-                </div>
-            );
-        }
+        const d = payload[0].payload as RealEstateSale;
+        if (!d?.serial_number) return null;
+
+        return (
+            <div className="bg-gray-700/90 text-white p-3 border border-gray-600 rounded-lg shadow-xl text-sm">
+                <p className="font-bold mb-1">{d.property_type}</p>
+                <p>Sale: ${d.sale_amount.toLocaleString()}</p>
+                <p>Assessed: ${d.assessed_value.toLocaleString()}</p>
+                <p>Town: {d.town}</p>
+                <p className="text-gray-400 mt-1">Click to select</p>
+            </div>
+        );
     }
     return null;
 };
 
-
-const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, selectedSale }) => {
-
-    // Filter out rows where sale_amount or assessed_value is zero
-    const filteredAndCleanData = data.filter(d =>
-        d.sale_amount > 0 && d.assessed_value > 0
+const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({
+                                                              data,
+                                                              onPointClick,
+                                                              selectedSale
+                                                          }) => {
+    const filtered = data.filter(
+        d => d.sale_amount > 0 && d.assessed_value > 0
     );
 
-    const propertyColorMap = usePropertyColors(filteredAndCleanData);
-    const uniquePropertyTypes = Array.from(new Set(filteredAndCleanData.map(d => d.property_type))).sort();
+    const uniqueData = React.useMemo(
+        () =>
+            Array.from(
+                new Map(filtered.map(item => [item.serial_number, item])).values()
+            ),
+        [filtered]
+    );
 
-    const getColor = (payload: RealEstateSale) => propertyColorMap[payload.property_type] || '#ccc';
+    const propertyColorMap = usePropertyColors(uniqueData);
 
-    const axisFormatter = (value: number) => {
-        // Only format if value is high, otherwise show as-is
-        if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-        if (value >= 1000) return `${(value / 1000).toLocaleString()}k`;
-        return value.toLocaleString();
+    const uniquePropertyTypes = Array.from(
+        new Set(uniqueData.map(d => d.property_type))
+    ).sort();
+
+    const getColor = (p: RealEstateSale) =>
+        propertyColorMap[p.property_type] || '#ccc';
+
+    const axisFormatter = (v: number) => {
+        if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
+        if (v >= 1000) return `${(v / 1000).toLocaleString()}k`;
+        return v.toLocaleString();
     };
 
-    // Custom shape function to apply styling based on selection and color (kept as is)
     const renderScatterShape = (props: any) => {
-        const isSelected = selectedSale && props.payload.serial_number === selectedSale.serial_number;
+        const selected =
+            selectedSale?.serial_number === props.payload.serial_number;
         const color = getColor(props.payload);
 
         return (
             <circle
                 cx={props.cx}
                 cy={props.cy}
-                // Increased size slightly (from 2.5 to 3/6) for better click target
-                r={isSelected ? 6 : 3}
-                fill={isSelected ? "#ff00ff" : color} // Neon color for selection
-                stroke={isSelected ? "#ffffff" : color}
-                strokeWidth={isSelected ? 2 : 0}
-                opacity={isSelected ? 1 : 0.6}
-                key={props.payload.serial_number}
-                style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                r={selected ? 6 : 3}
+                fill={selected ? "#ff00ff" : color}
+                stroke={selected ? "#ffffff" : color}
+                strokeWidth={selected ? 2 : 0}
+                opacity={selected ? 1 : 0.6}
+                style={{ pointerEvents: "all", cursor: "pointer" }}
+
+                onClick={props.onClick}
+                onMouseDown={props.onMouseDown}
+                onMouseUp={props.onMouseUp}
+                onMouseEnter={props.onMouseEnter}
+                onMouseLeave={props.onMouseLeave}
+                onMouseMove={props.onMouseMove}
             />
         );
     };
 
-    // Custom Legend component (no change needed here)
     const CustomLegend = () => (
         <div className="bg-gray-700/50 p-3 rounded-lg text-sm max-h-full overflow-y-auto">
             <h4 className="font-bold text-gray-300 mb-2">Property Type Legend</h4>
             <ul className="grid grid-cols-1 gap-x-4 gap-y-1">
-                {uniquePropertyTypes.map(type => (
-                    <li key={type} className="flex items-center text-gray-400">
-                        <span style={{ backgroundColor: propertyColorMap[type] }}
-                              className="inline-block w-3 h-3 rounded-full mr-2 opacity-70"></span>
-                        {type}
+                {uniquePropertyTypes.map(t => (
+                    <li key={t} className="flex items-center text-gray-400">
+                        <span
+                            style={{ backgroundColor: propertyColorMap[t] }}
+                            className="inline-block w-3 h-3 rounded-full mr-2 opacity-70"
+                        ></span>
+                        {t}
                     </li>
                 ))}
             </ul>
@@ -112,9 +144,13 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
         <ResponsiveContainer width="100%" height="100%">
             <ScatterChart
                 margin={{ top: 10, right: 100, bottom: 20, left: 10 }}
-                cursor="default"
+                cursor={false}
+                useVoronoi={false}
             >
-                <CartesianGrid stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" />
+                <CartesianGrid
+                    stroke="rgba(255,255,255,0.1)"
+                    strokeDasharray="3 3"
+                />
 
                 <XAxis
                     type="number"
@@ -124,8 +160,13 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     tickFormatter={axisFormatter}
                     domain={[0, 1500000]}
                     tickLine={false}
-                    axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
-                    label={{ value: 'Sale Amount', position: 'bottom', fill: '#9ca3af', dy: 10 }}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.2)' }}
+                    label={{
+                        value: 'Sale Amount',
+                        position: 'bottom',
+                        fill: '#9ca3af',
+                        dy: 10
+                    }}
                 />
 
                 <YAxis
@@ -136,15 +177,20 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     tickFormatter={axisFormatter}
                     domain={[0, 2000000]}
                     tickLine={false}
-                    axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
-                    label={{ value: 'Assessed Value', position: 'left', fill: '#9ca3af', dx: -10 }}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.2)' }}
+                    label={{
+                        value: 'Assessed Value',
+                        position: 'left',
+                        fill: '#9ca3af',
+                        dx: -10
+                    }}
                 />
 
-                <ZAxis dataKey="property_type" type="category" range={[10, 100]} />
-
                 <Tooltip
+                    trigger="click"
+                    cursor={false}
+                    wrapperStyle={{ pointerEvents: 'none' }}
                     content={<CustomTooltip />}
-                    cursor={{ strokeDasharray: '5 5', stroke: '#fff', opacity: 0.5 }}
                 />
 
                 <Legend
@@ -156,23 +202,22 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                 />
 
                 <Scatter
-                    name="Sales Data"
-                    data={filteredAndCleanData}
+                    data={uniqueData}
                     shape={renderScatterShape}
-                    onMouseDown={(e: any) => {
-                        // 🚨 FIX: Force single selection by checking if payload is an array and taking only the first item 🚨
-                        const clickedPayload = Array.isArray(e.payload) ? e.payload[0] : e.payload;
+                    activeDot={false}
+                    activeShape={null}
+                    legendType="none"
+                    isAnimationActive={false}
+                    onClick={(e: any) => {
+                        const p = Array.isArray(e.payload)
+                            ? e.payload[0]
+                            : e.payload;
+                        if (!p?.serial_number) return;
 
-                        if (clickedPayload && clickedPayload.serial_number) {
-                            const selectedSerialNumber = clickedPayload.serial_number;
-
-                            if (selectedSale && selectedSale.serial_number === selectedSerialNumber) {
-                                // Deselect if the same point is clicked
-                                onPointClick(null);
-                            } else {
-                                // Select only the single, unique data point
-                                onPointClick(clickedPayload as RealEstateSale);
-                            }
+                        if (selectedSale?.serial_number === p.serial_number) {
+                            onPointClick(null);
+                        } else {
+                            onPointClick(p as RealEstateSale);
                         }
                     }}
                 />
