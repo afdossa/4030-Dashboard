@@ -16,15 +16,16 @@ const app = express();
 // Ensure the port is correctly grabbed from the environment
 const PORT = process.env.PORT || 3000;
 
-// 2. CORS POLICY CONFIGURATION
+// 2. CORS POLICY CONFIGURATION (FIX)
 const allowedOrigins = [
-    'https://afdossa.github.io',
+    'https://afdossa.github.io', // **CRITICAL FIX: Allows your GitHub Pages domain to access the API**
     'https://four030-dashboard.onrender.com',
     'http://localhost:5173'
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl)
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
@@ -41,17 +42,8 @@ app.get('/', (req, res) => {
 
 app.get('/api/sales', async (req, res) => {
     try {
-        // *** CRITICAL FIX: SERVER-SIDE FILTERING ***
-        // Filters data to the visual range (Sale <= 2M, Assessed <= 1.5M)
-        // and removes low/zero values, preventing memory crash and client-side rendering issues.
-        const result = await client.query(`
-            SELECT * FROM real_estate_sales
-            WHERE
-                sale_amount > 10000 AND
-                assessed_value > 10000 AND
-                sale_amount <= 2000000 AND
-                assessed_value <= 1500000
-        `);
+        // **CRITICAL FIX: LIMIT the query to prevent Node.js Heap Out of Memory crash**
+        const result = await client.query('SELECT * FROM real_estate_sales LIMIT 1000');
 
         res.json(result.rows);
     } catch (err) {
