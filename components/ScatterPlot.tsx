@@ -14,7 +14,7 @@ import {
 
 interface ScatterPlotProps {
     data: RealEstateSale[];
-    onPointClick: (sale: RealEstateSale) => void;
+    onPointClick: (sale: RealEstateSale | null) => void;
     selectedSale: RealEstateSale | null;
 }
 
@@ -22,20 +22,9 @@ interface ScatterPlotProps {
 const usePropertyColors = (data: RealEstateSale[]) => {
     const uniquePropertyTypes = React.useMemo(() => Array.from(new Set(data.map(d => d.property_type))).sort(), [data]);
     const colors = [
-        '#6366f1', // Indigo 500
-        '#f59e0b', // Amber 500
-        '#10b981', // Emerald 500
-        '#ef4444', // Red 500
-        '#06b6d4', // Cyan 500
-        '#eab308', // Yellow 600
-        '#a855f7', // Purple 500
-        '#f97316', // Orange 500
-        '#84cc16', // Lime 500
-        '#ec4899', // Pink 500
-        '#4b5563', // Gray
-        '#34d399', // Light Emerald
-        '#fcd34d', // Light Amber
-        '#a78bfa', // Light Purple
+        '#6366f1', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#eab308',
+        '#a855f7', '#f97316', '#84cc16', '#ec4899', '#4b5563', '#34d399',
+        '#fcd34d', '#a78bfa',
     ];
     return React.useMemo(() => uniquePropertyTypes.reduce((acc, type, index) => {
         acc[type] = colors[index % colors.length];
@@ -82,23 +71,23 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
         return value.toLocaleString();
     };
 
-    // Custom shape function to apply styling based on selection and color
+    // Custom shape function to apply styling based on selection and color (kept as is)
     const renderScatterShape = (props: any) => {
-        // FIX: Compare serial_number for unique selection
         const isSelected = selectedSale && props.payload.serial_number === selectedSale.serial_number;
+        const color = getColor(props.payload);
 
         return (
             <circle
                 cx={props.cx}
                 cy={props.cy}
-                // Small radius (2.5) to minimize overlap for cleaner visualization
-                r={isSelected ? 8 : 2.5}
-                fill={isSelected ? "#ff00ff" : getColor(props.payload)} // Neon color for selection
-                stroke={isSelected ? "#ffffff" : "none"}
+                // Increased size slightly (from 2.5 to 3/6) for better click target
+                r={isSelected ? 6 : 3}
+                fill={isSelected ? "#ff00ff" : color} // Neon color for selection
+                stroke={isSelected ? "#ffffff" : color}
                 strokeWidth={isSelected ? 2 : 0}
-                opacity={isSelected ? 1 : 0.7}
-                // FIX: Use serial_number as the key for uniqueness
+                opacity={isSelected ? 1 : 0.6}
                 key={props.payload.serial_number}
+                style={{ pointerEvents: 'all', cursor: 'pointer' }}
             />
         );
     };
@@ -122,41 +111,35 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
     return (
         <ResponsiveContainer width="100%" height="100%">
             <ScatterChart
-                // Adjusted right margin to make space for the vertical legend
                 margin={{ top: 10, right: 100, bottom: 20, left: 10 }}
                 cursor="default"
             >
                 <CartesianGrid stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" />
 
-                {/* FIX 1: X-Axis should be Sale Amount (to match Power BI visual) */}
                 <XAxis
                     type="number"
-                    dataKey="sale_amount" // **CHANGED from assessed_value**
+                    dataKey="sale_amount"
                     name="Sale Amount"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    // Domain adjusted to match the 1.5M scale shown in Power BI
-                    domain={[0, 1500000]} // **CHANGED to fixed domain**
+                    domain={[0, 1500000]}
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                     label={{ value: 'Sale Amount', position: 'bottom', fill: '#9ca3af', dy: 10 }}
                 />
 
-                {/* FIX 2: Y-Axis should be Assessed Value (Numeric) */}
                 <YAxis
-                    type="number" // **CHANGED from category to number**
-                    dataKey="assessed_value" // **CHANGED from property_type**
+                    type="number"
+                    dataKey="assessed_value"
                     name="Assessed Value"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    // Domain adjusted to match the 2.0M scale shown in Power BI
-                    domain={[0, 2000000]} // **CHANGED to fixed domain**
+                    domain={[0, 2000000]}
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                     label={{ value: 'Assessed Value', position: 'left', fill: '#9ca3af', dx: -10 }}
                 />
 
-                {/* ZAxis remains property_type to control color/grouping */}
                 <ZAxis dataKey="property_type" type="category" range={[10, 100]} />
 
                 <Tooltip
@@ -164,7 +147,6 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     cursor={{ strokeDasharray: '5 5', stroke: '#fff', opacity: 0.5 }}
                 />
 
-                {/* Legend component */}
                 <Legend
                     content={<CustomLegend />}
                     layout="vertical"
@@ -177,12 +159,20 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     name="Sales Data"
                     data={filteredAndCleanData}
                     shape={renderScatterShape}
-                    // FIX 3: Ensure the point click uses a unique identifier (serial_number)
-                    // The issue was likely not the year, but the lack of a serial_number being used.
-                    onClick={(e: any) => {
-                        // Check if the payload data exists and has a unique identifier
-                        if (e && e.payload && e.payload.serial_number) {
-                            onPointClick(e.payload as RealEstateSale);
+                    onMouseDown={(e: any) => {
+                        // 🚨 FIX: Force single selection by checking if payload is an array and taking only the first item 🚨
+                        const clickedPayload = Array.isArray(e.payload) ? e.payload[0] : e.payload;
+
+                        if (clickedPayload && clickedPayload.serial_number) {
+                            const selectedSerialNumber = clickedPayload.serial_number;
+
+                            if (selectedSale && selectedSale.serial_number === selectedSerialNumber) {
+                                // Deselect if the same point is clicked
+                                onPointClick(null);
+                            } else {
+                                // Select only the single, unique data point
+                                onPointClick(clickedPayload as RealEstateSale);
+                            }
                         }
                     }}
                 />

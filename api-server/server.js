@@ -42,11 +42,12 @@ const BASE_WHERE = `
 `;
 
 // 3. ROUTES
+
 app.get('/', (req, res) => {
     res.send('Real Estate Data API is running. Use /api/sales to get data.');
 });
 
-// Primary route for Scatter Plot data (unchanged from your input)
+// Primary route for Scatter Plot data
 app.get('/api/sales', async (req, res) => {
     try {
         const limitCount = 10000;
@@ -72,17 +73,17 @@ app.get('/api/sales', async (req, res) => {
         const offset = Math.floor(Math.random() * maxOffset);
 
         const dataQuery = `
-            SELECT 
-                property_type, 
+            SELECT
+                property_type,
                 town,
                 serial_number,
-                CAST(assessed_value AS numeric) AS assessed_value, 
-                CAST(sale_amount AS numeric) AS sale_amount 
-            FROM 
+                CAST(assessed_value AS numeric) AS assessed_value,
+                CAST(sale_amount AS numeric) AS sale_amount
+            FROM
                 real_estate_sales
-            WHERE 
+            WHERE
                 ${whereClause}
-            LIMIT ${limitCount} OFFSET ${offset};
+                LIMIT ${limitCount} OFFSET ${offset};
         `;
 
         const result = await client.query(dataQuery);
@@ -96,24 +97,20 @@ app.get('/api/sales', async (req, res) => {
     }
 });
 
-// --- NEW CONTEXTUAL ROUTE ---
+// Contextual route for the three bar charts
 app.get('/api/sales/context', async (req, res) => {
     try {
         const { town, property_type, serial_number } = req.query;
 
-        // Determine if we are filtering or showing global data
         const isFiltered = town && property_type;
         const filterClause = isFiltered
             ? `AND town = $1 AND property_type = $2`
-            : ``; // If not filtered, the where clause ends here
-        const queryParams = isFiltered ? [town, property_type] : [];
+            : ``;
 
-        // ----------------------------------------------------
+        const propTypeFilter = isFiltered ? `AND property_type = $1` : ``;
+        const paramsFilter = isFiltered ? [property_type] : [];
+
         // CHART 1: Market Penetration (Count by Town)
-        // Default: Count of ALL Property Types by Town
-        // Filtered: Count of SELECTED Property Type by Town
-        // ----------------------------------------------------
-        const propTypeFilter1 = isFiltered ? `AND property_type = $2` : ``;
         const query1 = `
             SELECT 
                 town, 
@@ -122,26 +119,19 @@ app.get('/api/sales/context', async (req, res) => {
                 real_estate_sales
             WHERE 
                 ${BASE_WHERE}
-                ${isFiltered ? propTypeFilter1 : ``}
+                ${propTypeFilter}
             GROUP BY 
                 town
             ORDER BY 
                 count DESC;
         `;
-        // Only include property_type if filtered. We use $2 if filtered, otherwise no param needed.
-        const params1 = isFiltered ? [town, property_type] : [];
-        const result1 = await client.query(query1, params1.slice(1)); // Pass property_type filter only if needed
+        const result1 = await client.query(query1, paramsFilter);
 
 
-        // ----------------------------------------------------
         // CHART 2: Comparative Assessed Value
-        // Default: Average Assessed Value across ALL sales.
-        // Filtered: Average Assessed Value for selected Town and Property Type.
-        // ----------------------------------------------------
         const query2 = `
             SELECT 
                 AVG(CAST(assessed_value AS numeric)) as avg_assessed,
-                -- Only fetch selected_assessed if a serial_number is provided
                 ${serial_number ? `(SELECT CAST(assessed_value AS numeric) FROM real_estate_sales WHERE serial_number = '${serial_number}') as selected_assessed` : `NULL as selected_assessed`}
             FROM 
                 real_estate_sales
@@ -149,16 +139,11 @@ app.get('/api/sales/context', async (req, res) => {
                 ${BASE_WHERE}
                 ${filterClause};
         `;
-        // Use [town, property_type] as parameters only if filtered
         const params2 = isFiltered ? [town, property_type] : [];
         const result2 = await client.query(query2, params2);
 
-        // ----------------------------------------------------
+
         // CHART 3: Sale Price Distribution (Price Buckets)
-        // Default: Distribution across ALL Property Types.
-        // Filtered: Distribution for SELECTED Property Type.
-        // ----------------------------------------------------
-        const propTypeFilter3 = isFiltered ? `AND property_type = $2` : ``;
         const query3 = `
             SELECT
                 CASE
@@ -173,20 +158,19 @@ app.get('/api/sales/context', async (req, res) => {
                 real_estate_sales
             WHERE
                 ${BASE_WHERE}
-                ${isFiltered ? propTypeFilter3 : ``}
+                ${propTypeFilter}
             GROUP BY
                 price_bucket
             ORDER BY
                 MIN(CAST(sale_amount AS numeric));
         `;
-        const params3 = isFiltered ? [town, property_type] : [];
-        const result3 = await client.query(query3, params3.slice(1));
+        const result3 = await client.query(query3, paramsFilter);
 
         res.json({
             marketPenetration: result1.rows,
             comparativeAssessed: {
                 avg_assessed: result2.rows[0].avg_assessed,
-                selected_assessed: result2.rows[0].selected_assessed || null // Ensure null if not filtered
+                selected_assessed: result2.rows[0].selected_assessed || null
             },
             saleDistribution: result3.rows,
         });
