@@ -60,7 +60,8 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, selectedSale }) => {
 
-    // **NEW**: Only filter out zero/null values here, as the API handles the heavy lifting (outlier filtering)
+    // Filter out rows where sale_amount or assessed_value is zero (to clean up the dense zero-axis lines often seen in raw data)
+    // The API now handles the outlier filtering.
     const filteredAndCleanData = data.filter(d =>
         d.sale_amount > 0 && d.assessed_value > 0
     );
@@ -83,7 +84,7 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                 cy={props.cy}
                 // Small radius (2.5) to minimize overlap for cleaner visualization
                 r={isSelected ? 8 : 2.5}
-                fill={isSelected ? "#ff00ff" : getColor(props.payload)}
+                fill={isSelected ? "#ff00ff" : getColor(props.payload)} // Neon color for selection
                 stroke={isSelected ? "#ffffff" : "none"}
                 strokeWidth={isSelected ? 2 : 0}
                 opacity={isSelected ? 1 : 0.7}
@@ -106,8 +107,7 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     name="Assessed Value"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    // **NEW**: Let Recharts automatically scale to the max value of the filtered data
-                    domain={[0, 'auto']}
+                    domain={[0, 'auto']} // Let Recharts automatically scale to the max value of the filtered data
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                 />
@@ -118,8 +118,7 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     name="Sale Amount"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    // **NEW**: Let Recharts automatically scale to the max value of the filtered data
-                    domain={[0, 'auto']}
+                    domain={[0, 'auto']} // Let Recharts automatically scale to the max value of the filtered data
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                 />

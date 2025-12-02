@@ -43,13 +43,13 @@ app.get('/api/sales', async (req, res) => {
     try {
         // *** CRITICAL FIX: SERVER-SIDE FILTERING ***
         // Filters data to the visual range (Sale <= 2M, Assessed <= 1.5M)
-        // and removes low/zero values to prevent memory crash and client-side rendering issues.
+        // and removes low/zero values, preventing memory crash and client-side rendering issues.
         const result = await client.query(`
             SELECT * FROM real_estate_sales
-            WHERE 
-                sale_amount > 10000 AND 
-                assessed_value > 10000 AND 
-                sale_amount <= 2000000 AND 
+            WHERE
+                sale_amount > 10000 AND
+                assessed_value > 10000 AND
+                sale_amount <= 2000000 AND
                 assessed_value <= 1500000
         `);
 
