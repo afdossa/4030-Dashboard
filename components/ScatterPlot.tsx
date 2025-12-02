@@ -14,165 +14,179 @@ import {
 
 interface ScatterPlotProps {
     data: RealEstateSale[];
-    onPointClick: (sale: RealEstateSale) => void;
+    onPointClick: (sale: RealEstateSale | null) => void;
     selectedSale: RealEstateSale | null;
 }
 
-// Custom hook to generate consistent colors for property types
+/* ---------------------------------------------
+   PROPERTY TYPE COLOR MAPPING
+---------------------------------------------- */
 const usePropertyColors = (data: RealEstateSale[]) => {
-    const uniquePropertyTypes = React.useMemo(() => Array.from(new Set(data.map(d => d.property_type))).sort(), [data]);
-    const colors = [
-        '#6366f1', // Indigo 500
-        '#f59e0b', // Amber 500
-        '#10b981', // Emerald 500
-        '#ef4444', // Red 500
-        '#06b6d4', // Cyan 500
-        '#eab308', // Yellow 600
-        '#a855f7', // Purple 500
-        '#f97316', // Orange 500
-        '#84cc16', // Lime 500
-        '#ec4899', // Pink 500
-        '#4b5563', // Gray
-        '#34d399', // Light Emerald
-        '#fcd34d', // Light Amber
-        '#a78bfa', // Light Purple
+    const unique = React.useMemo(
+        () => [...new Set(data.map(d => d.property_type))].sort(),
+        [data]
+    );
+
+    const palette = [
+        '#6366f1','#f59e0b','#10b981','#ef4444','#06b6d4','#eab308','#a855f7',
+        '#f97316','#84cc16','#ec4899','#4b5563','#34d399','#fcd34d','#a78bfa'
     ];
-    return React.useMemo(() => uniquePropertyTypes.reduce((acc, type, index) => {
-        acc[type] = colors[index % colors.length];
-        return acc;
-    }, {} as Record<string, string>), [uniquePropertyTypes]);
+
+    return React.useMemo(
+        () =>
+            unique.reduce((acc, type, idx) => {
+                acc[type] = palette[idx % palette.length];
+                return acc;
+            }, {} as Record<string, string>),
+        [unique]
+    );
 };
 
-// Custom Tooltip component
+/* ---------------------------------------------
+   TOOLTIP
+---------------------------------------------- */
 const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-        const data = payload[0].payload as RealEstateSale;
-        if (data && data.serial_number) {
-            return (
-                <div className="bg-gray-700/90 text-white p-3 border border-gray-600 rounded-lg shadow-xl text-sm">
-                    <p className="font-bold mb-1">{data.property_type}</p>
-                    <p>Sale: ${data.sale_amount.toLocaleString()}</p>
-                    <p>Assessed: ${data.assessed_value.toLocaleString()}</p>
-                    <p>Town: {data.town}</p>
-                    <p className="text-gray-400 mt-1">Click to select</p>
-                </div>
-            );
-        }
+    if (active && payload?.length) {
+        const d = payload[0].payload as RealEstateSale;
+        return (
+            <div className="bg-gray-700/90 text-white p-3 border border-gray-600 rounded-lg shadow-xl text-sm">
+                <p className="font-bold mb-1">{d.property_type}</p>
+                <p>Sale: ${d.sale_amount.toLocaleString()}</p>
+                <p>Assessed: ${d.assessed_value.toLocaleString()}</p>
+                <p>Town: {d.town}</p>
+                <p className="text-gray-400 mt-1">Click to select</p>
+            </div>
+        );
     }
     return null;
 };
 
+/* ---------------------------------------------
+   LEGEND (fixed)
+---------------------------------------------- */
+const CustomLegend = (props: any) => {
+    const { payload } = props;
+    if (!payload) return null;
 
-const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, selectedSale }) => {
-
-    // Filter out rows where sale_amount or assessed_value is zero (The API handles the upper bounds)
-    const filteredAndCleanData = data.filter(d =>
-        d.sale_amount > 0 && d.assessed_value > 0
-    );
-
-    const propertyColorMap = usePropertyColors(filteredAndCleanData);
-    const uniquePropertyTypes = Array.from(new Set(filteredAndCleanData.map(d => d.property_type))).sort();
-
-    const getColor = (payload: RealEstateSale) => propertyColorMap[payload.property_type] || '#ccc';
-
-    const axisFormatter = (value: number) => {
-        return value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : `${(value / 1000).toLocaleString()}k`;
-    };
-
-    // Custom shape function to apply styling based on selection and color
-    const renderScatterShape = (props: any) => {
-        const isSelected = selectedSale && props.payload.serial_number === selectedSale.serial_number;
-
-        return (
-            <circle
-                cx={props.cx}
-                cy={props.cy}
-                // Small radius (2.5) to minimize overlap for cleaner visualization
-                r={isSelected ? 8 : 2.5}
-                fill={isSelected ? "#ff00ff" : getColor(props.payload)} // Neon color for selection
-                stroke={isSelected ? "#ffffff" : "none"}
-                strokeWidth={isSelected ? 2 : 0}
-                opacity={isSelected ? 1 : 0.7}
-                key={props.payload.serial_number}
-            />
-        );
-    };
-
-    // **LEGEND FIX:** Custom Legend component
-    const CustomLegend = () => (
+    return (
         <div className="bg-gray-700/50 p-3 rounded-lg text-sm max-h-full overflow-y-auto">
             <h4 className="font-bold text-gray-300 mb-2">Property Type Legend</h4>
-            <ul className="grid grid-cols-1 gap-x-4 gap-y-1">
-                {uniquePropertyTypes.map(type => (
-                    <li key={type} className="flex items-center text-gray-400">
-                        <span style={{ backgroundColor: propertyColorMap[type] }}
-                              className="inline-block w-3 h-3 rounded-full mr-2 opacity-70"></span>
-                        {type}
+            <ul className="flex flex-col gap-1">
+                {payload.map((entry: any) => (
+                    <li key={entry.value} className="flex items-center text-gray-400">
+                        <span
+                            className="inline-block w-3 h-3 rounded-full mr-2"
+                            style={{ background: entry.color }}
+                        />
+                        {entry.value}
                     </li>
                 ))}
             </ul>
         </div>
     );
+};
 
+/* ---------------------------------------------
+   MAIN COMPONENT
+---------------------------------------------- */
+const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({
+                                                              data,
+                                                              onPointClick,
+                                                              selectedSale
+                                                          }) => {
+
+    /* -------------------------
+       APPLY POWER BI FILTERS
+    --------------------------*/
+    const filtered = data.filter(
+        d =>
+            d.sale_amount > 0 &&
+            d.assessed_value > 0 &&
+            d.assessed_value < 150000 &&
+            d.sale_amount < 200000
+    );
+
+    const propertyColorMap = usePropertyColors(filtered);
+
+    const axisFormatter = (v: number) =>
+        v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : `${(v / 1_000).toFixed(0)}k`;
+
+    /* -------------------------
+       CUSTOM POINT SHAPE
+    --------------------------*/
+    const renderShape = (props: any) => {
+        const isSelected =
+            selectedSale?.serial_number === props.payload.serial_number;
+
+        return (
+            <circle
+                cx={props.cx}
+                cy={props.cy}
+                r={isSelected ? 8 : 2.5}
+                fill={isSelected ? '#ff00ff' : propertyColorMap[props.payload.property_type]}
+                stroke={isSelected ? '#ffffff' : 'none'}
+                strokeWidth={isSelected ? 2 : 0}
+                opacity={isSelected ? 1 : 0.75}
+            />
+        );
+    };
+
+    /* -------------------------
+       CLICK HANDLER
+    --------------------------*/
+    const handleClick = (e: any) => {
+        if (!e?.payload) return;
+
+        const clicked = e.payload as RealEstateSale;
+
+        if (selectedSale?.serial_number === clicked.serial_number) {
+            onPointClick(null); // deselect
+        } else {
+            onPointClick(clicked);
+        }
+    };
+
+    /* -------------------------
+              RENDER
+    --------------------------*/
     return (
         <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart
-                // Adjusted right margin to make space for the vertical legend
-                margin={{ top: 10, right: 100, bottom: 20, left: 10 }}
-                cursor="default"
-            >
-                <CartesianGrid stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" />
+            <ScatterChart margin={{ top: 10, right: 140, bottom: 20, left: 10 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
 
-                {/* X-Axis: Assessed Value (Numeric) */}
                 <XAxis
                     type="number"
                     dataKey="assessed_value"
-                    name="Assessed Value"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
                     domain={[0, 'auto']}
-                    tickLine={false}
-                    axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                     label={{ value: 'Assessed Value', position: 'bottom', fill: '#9ca3af', dy: 10 }}
                 />
 
-                {/* Y-Axis: Property Type (Categorical) - For the Power BI Strip Plot Look */}
                 <YAxis
                     type="category"
                     dataKey="property_type"
-                    name="Property Type"
                     stroke="#9ca3af"
-                    tickLine={false}
-                    axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
                     scale="point"
-                    allowDuplicatedCategory={false}
                 />
 
-                <ZAxis dataKey="property_type" type="category" range={[10, 100]} />
+                <ZAxis dataKey="property_type" type="category" />
 
-                <Tooltip
-                    content={<CustomTooltip />}
-                    cursor={{ strokeDasharray: '5 5', stroke: '#fff', opacity: 0.5 }}
-                />
+                <Tooltip content={<CustomTooltip />} />
 
-                {/* LEGEND FIX: Place the custom component inside the Legend wrapper */}
+                {/* FIXED: legend must receive a function, not JSX */}
                 <Legend
-                    content={<CustomLegend />}
+                    content={CustomLegend}
                     layout="vertical"
                     align="right"
                     verticalAlign="middle"
-                    wrapperStyle={{ top: 0, right: 0, padding: '10px' }}
+                    wrapperStyle={{ right: 0 }}
                 />
 
                 <Scatter
-                    name="Sales Data"
-                    data={filteredAndCleanData}
-                    shape={renderScatterShape}
-                    onClick={(e: any) => {
-                        if (e && e.payload) {
-                            onPointClick(e.payload as RealEstateSale);
-                        }
-                    }}
+                    data={filtered}
+                    shape={renderShape}
+                    onClick={handleClick}
                 />
             </ScatterChart>
         </ResponsiveContainer>
