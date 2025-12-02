@@ -13,7 +13,6 @@ client.connect()
     .catch(err => console.error('Database connection error. Ensure the service is linked to the database and credentials are correct.', err.stack));
 
 const app = express();
-// Default to 3000, but Render uses the PORT environment variable
 const PORT = process.env.PORT || 3000;
 
 // 2. CORS POLICY CONFIGURATION
@@ -43,15 +42,27 @@ app.get('/api/sales', async (req, res) => {
     try {
         const limitCount = 10000;
 
-        // Define the WHERE clause filters once for clean data retrieval
-        const whereClause = `
+        // Extract filter parameters from the request query string
+        // Use defaults that match your visualization axes (2.0M and 1.5M)
+        const maxAssessed = parseFloat(req.query.max_assessed) || 2000000;
+        const maxSale = parseFloat(req.query.max_sale) || 1500000;
+
+        // Base cleaning filters: ensures non-null, numeric, and > 1
+        let whereClause = `
             assessed_value IS NOT NULL 
             AND sale_amount IS NOT NULL 
             AND CAST(assessed_value AS numeric) > 1 
             AND CAST(sale_amount AS numeric) > 1
         `;
 
-        // 1. Get the total count of filtered rows (FAST operation)
+        // Add dynamic axis filters based on URL parameters
+        // This makes the API responsive to your Power BI axis limits
+        whereClause += `
+            AND CAST(assessed_value AS numeric) <= ${maxAssessed} 
+            AND CAST(sale_amount AS numeric) <= ${maxSale}
+        `;
+
+        // 1. Get the total count of filtered rows
         const countQuery = `
             SELECT COUNT(*) FROM real_estate_sales WHERE ${whereClause};
         `;
@@ -64,11 +75,10 @@ app.get('/api/sales', async (req, res) => {
         }
 
         // 2. Calculate a random offset to sample data
-        // Ensure offset doesn't exceed the bounds of the total data
         const maxOffset = Math.max(0, totalRows - limitCount);
         const offset = Math.floor(Math.random() * maxOffset);
 
-        // 3. Fetch the data using the random OFFSET (MUCH faster than ORDER BY RANDOM())
+        // 3. Fetch the data using the random OFFSET
         const dataQuery = `
             SELECT 
                 property_type, 
@@ -82,6 +92,9 @@ app.get('/api/sales', async (req, res) => {
         `;
 
         const result = await client.query(dataQuery);
+
+        // Optional: Log the filters applied for debugging
+        console.log(`Querying ${totalRows} total rows. Returning ${result.rows.length} rows with Max Assessed: ${maxAssessed}, Max Sale: ${maxSale}`);
 
         res.json(result.rows);
     } catch (err) {
