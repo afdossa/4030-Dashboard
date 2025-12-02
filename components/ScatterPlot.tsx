@@ -18,7 +18,7 @@ interface ScatterPlotProps {
     selectedSale: RealEstateSale | null;
 }
 
-// Custom hook to generate consistent colors for property types
+// Custom hook to generate consistent colors for property types (no change needed here)
 const usePropertyColors = (data: RealEstateSale[]) => {
     const uniquePropertyTypes = React.useMemo(() => Array.from(new Set(data.map(d => d.property_type))).sort(), [data]);
     const colors = [
@@ -43,7 +43,7 @@ const usePropertyColors = (data: RealEstateSale[]) => {
     }, {} as Record<string, string>), [uniquePropertyTypes]);
 };
 
-// Custom Tooltip component
+// Custom Tooltip component (no change needed here)
 const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload as RealEstateSale;
@@ -76,11 +76,15 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
     const getColor = (payload: RealEstateSale) => propertyColorMap[payload.property_type] || '#ccc';
 
     const axisFormatter = (value: number) => {
-        return value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : `${(value / 1000).toLocaleString()}k`;
+        // Only format if value is high, otherwise show as-is
+        if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+        if (value >= 1000) return `${(value / 1000).toLocaleString()}k`;
+        return value.toLocaleString();
     };
 
     // Custom shape function to apply styling based on selection and color
     const renderScatterShape = (props: any) => {
+        // FIX: Compare serial_number for unique selection
         const isSelected = selectedSale && props.payload.serial_number === selectedSale.serial_number;
 
         return (
@@ -93,12 +97,13 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                 stroke={isSelected ? "#ffffff" : "none"}
                 strokeWidth={isSelected ? 2 : 0}
                 opacity={isSelected ? 1 : 0.7}
+                // FIX: Use serial_number as the key for uniqueness
                 key={props.payload.serial_number}
             />
         );
     };
 
-    // Custom Legend component
+    // Custom Legend component (no change needed here)
     const CustomLegend = () => (
         <div className="bg-gray-700/50 p-3 rounded-lg text-sm max-h-full overflow-y-auto">
             <h4 className="font-bold text-gray-300 mb-2">Property Type Legend</h4>
@@ -123,31 +128,35 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
             >
                 <CartesianGrid stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" />
 
-                {/* X-Axis: Assessed Value (Numeric) */}
+                {/* FIX 1: X-Axis should be Sale Amount (to match Power BI visual) */}
                 <XAxis
                     type="number"
-                    dataKey="assessed_value"
+                    dataKey="sale_amount" // **CHANGED from assessed_value**
+                    name="Sale Amount"
+                    stroke="#9ca3af"
+                    tickFormatter={axisFormatter}
+                    // Domain adjusted to match the 1.5M scale shown in Power BI
+                    domain={[0, 1500000]} // **CHANGED to fixed domain**
+                    tickLine={false}
+                    axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
+                    label={{ value: 'Sale Amount', position: 'bottom', fill: '#9ca3af', dy: 10 }}
+                />
+
+                {/* FIX 2: Y-Axis should be Assessed Value (Numeric) */}
+                <YAxis
+                    type="number" // **CHANGED from category to number**
+                    dataKey="assessed_value" // **CHANGED from property_type**
                     name="Assessed Value"
                     stroke="#9ca3af"
                     tickFormatter={axisFormatter}
-                    domain={[0, 'auto']}
+                    // Domain adjusted to match the 2.0M scale shown in Power BI
+                    domain={[0, 2000000]} // **CHANGED to fixed domain**
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
-                    label={{ value: 'Assessed Value', position: 'bottom', fill: '#9ca3af', dy: 10 }}
+                    label={{ value: 'Assessed Value', position: 'left', fill: '#9ca3af', dx: -10 }}
                 />
 
-                {/* Y-Axis: Property Type (Categorical) - MATCHES POWER BI VISUAL */}
-                <YAxis
-                    type="category"
-                    dataKey="property_type"
-                    name="Property Type"
-                    stroke="#9ca3af"
-                    tickLine={false}
-                    axisLine={{ stroke: 'rgba(255, 255, 255, 0.2)' }}
-                    scale="point"
-                    allowDuplicatedCategory={false}
-                />
-
+                {/* ZAxis remains property_type to control color/grouping */}
                 <ZAxis dataKey="property_type" type="category" range={[10, 100]} />
 
                 <Tooltip
@@ -168,8 +177,11 @@ const ScatterPlotComponent: React.FC<ScatterPlotProps> = ({ data, onPointClick, 
                     name="Sales Data"
                     data={filteredAndCleanData}
                     shape={renderScatterShape}
+                    // FIX 3: Ensure the point click uses a unique identifier (serial_number)
+                    // The issue was likely not the year, but the lack of a serial_number being used.
                     onClick={(e: any) => {
-                        if (e && e.payload) {
+                        // Check if the payload data exists and has a unique identifier
+                        if (e && e.payload && e.payload.serial_number) {
                             onPointClick(e.payload as RealEstateSale);
                         }
                     }}
