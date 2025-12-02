@@ -43,19 +43,22 @@ app.get('/', (req, res) => {
 
 app.get('/api/sales', async (req, res) => {
     try {
-        // OPTIMIZED QUERY FOR SCATTER PLOT
+        // OPTIMIZED QUERY: Filters out non-numeric values, NULLs, and zeros/small numbers
         const queryText = `
             SELECT
                 property_type,
-                assessed_value::numeric,
-                sale_amount::numeric
+                CAST(assessed_value AS numeric) AS assessed_value,
+                CAST(sale_amount AS numeric) AS sale_amount
             FROM
                 real_estate_sales
             WHERE
-                assessed_value IS NOT NULL
-              AND sale_amount IS NOT NULL
-              AND assessed_value > 0
-              AND sale_amount > 0
+                -- Ensures the values only contain numbers and decimals before casting/comparing
+                assessed_value ~ '^[0-9.]+$' AND sale_amount ~ '^[0-9.]+$' 
+                AND assessed_value IS NOT NULL 
+                AND sale_amount IS NOT NULL 
+                -- Filters out zeros and extremely small values that often indicate bad data
+                AND CAST(assessed_value AS numeric) > 1 
+                AND CAST(sale_amount AS numeric) > 1
             ORDER BY RANDOM()
                 LIMIT 10000;
         `;
@@ -70,5 +73,6 @@ app.get('/api/sales', async (req, res) => {
 });
 
 app.listen(PORT, () => {
+    // FIX for "SyntaxError: Invalid or unexpected token"
     console.log(`API Server listening on port ${PORT}`);
 });
